@@ -5,3 +5,4 @@ dist/
 *.exe
 *.blockmap
 .netlify/
+downloads/
