@@ -158,16 +158,32 @@ export function toggleLock() {
 // Called when Firebase sends a new state
 export function updateLocalState(newState) {
   const wasRunning = localState?.isRunning;
+  const nowRunning = newState.isRunning !== undefined ? newState.isRunning : wasRunning;
+
+  // Only update non-timer fields if countdown is already running locally
+  if (wasRunning && nowRunning && localCountdown) {
+    // Timer is running and local countdown is active — don't touch timeLeft
+    // Just update appearance/control fields
+    const { timeLeft, startedTimeLeft, lastTick, isRunning, ...safeFields } = newState;
+    localState = { ...localState, ...safeFields };
+    return;
+  }
+
+  // State transition or first sync — apply everything
   localState = { ...localState, ...newState };
 
-  // Compute correct timeLeft from timestamps
   if (localState.isRunning) {
+    // Recalculate once and start local countdown
     localState.timeLeft = computeTimeLeft(localState);
     if (!localCountdown) {
       startLocalCountdown();
     }
   } else {
     stopLocalCountdown();
+    // Use the timeLeft from Firebase when stopped
+    if (newState.timeLeft !== undefined) {
+      localState.timeLeft = newState.timeLeft;
+    }
   }
 }
 
