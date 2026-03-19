@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Timer Display</title>
+  <!-- Firebase compat (works with file:// and regular script tags) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -74,20 +77,34 @@
       50% { opacity: 0.3; }
     }
     .blinking { animation: blink 1s ease-in-out infinite; }
+
+    .connecting {
+      color: rgba(255,255,255,0.4);
+      font-size: 1rem;
+      font-weight: 500;
+    }
   </style>
 </head>
 <body>
 
   <div id="timer-container" class="timer-container">
     <div id="message-text" class="message-text message-below" style="opacity:0;"></div>
-    <div id="timer-text" class="timer-text size-text-6xl">05:00</div>
+    <div id="timer-text" class="timer-text size-text-6xl">
+      <span class="connecting">Connexion...</span>
+    </div>
   </div>
 
-  <script type="module">
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-    import { getDatabase, ref, onValue } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+  <script>
+    // Get room code from URL
+    var params = new URLSearchParams(window.location.search);
+    var roomCode = params.get('room');
+    if (!roomCode) {
+      document.body.innerHTML = '<div style="color:white;text-align:center;padding:2rem;"><h1>Pas de code de salle</h1></div>';
+      throw new Error('No room code');
+    }
 
-    const firebaseConfig = {
+    // Init Firebase (compat mode)
+    var firebaseConfig = {
       apiKey: "AIzaSyCnV7heF2vU2tA7uOTrf4tEamVW73yUp1o",
       authDomain: "tprezpro-web.firebaseapp.com",
       databaseURL: "https://tprezpro-web-default-rtdb.europe-west1.firebasedatabase.app",
@@ -97,40 +114,36 @@
       appId: "1:190667786733:web:dcd2a2d52855ca63cc7fe4"
     };
 
-    // Get room code from URL
-    const params = new URLSearchParams(window.location.search);
-    const roomCode = params.get('room');
-    if (!roomCode) {
-      document.body.innerHTML = '<div style="color:white;text-align:center;padding:2rem;"><h1>No room code</h1></div>';
-      throw new Error('No room code');
-    }
+    firebase.initializeApp(firebaseConfig);
+    var db = firebase.database();
 
-    // Init Firebase
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
+    var timerContainer = document.getElementById('timer-container');
+    var timerText = document.getElementById('timer-text');
+    var messageText = document.getElementById('message-text');
 
-    const timerContainer = document.getElementById('timer-container');
-    const timerText = document.getElementById('timer-text');
-    const messageText = document.getElementById('message-text');
-
-    const sizeMap = {
+    var sizeMap = {
       'text-4xl': 'size-text-4xl',
       'text-6xl': 'size-text-6xl',
       'text-8xl': 'size-text-8xl',
       'text-9xl': 'size-text-9xl'
     };
 
-    let prevLocked = true;
+    var prevLocked = true;
+    var connected = false;
 
     // Listen to state
-    const stateRef = ref(db, `rooms/${roomCode}/state`);
-    onValue(stateRef, (snapshot) => {
-      const state = snapshot.val();
-      if (!state) return;
+    db.ref('rooms/' + roomCode + '/state').on('value', function(snapshot) {
+      var state = snapshot.val();
+      if (!state) {
+        timerText.innerHTML = '<span class="connecting">Salle introuvable: ' + roomCode + '</span>';
+        return;
+      }
+
+      connected = true;
 
       // Time display
-      const min = Math.floor(state.timeLeft / 60);
-      const sec = state.timeLeft % 60;
+      var min = Math.floor(state.timeLeft / 60);
+      var sec = state.timeLeft % 60;
       timerText.textContent = String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
 
       // Visibility
@@ -140,7 +153,7 @@
       if (state.color) {
         timerText.classList.add('solid-color');
         timerText.style.color = state.color;
-        timerText.style.filter = `drop-shadow(0 0 30px ${state.color}80)`;
+        timerText.style.filter = 'drop-shadow(0 0 30px ' + state.color + '80)';
       } else {
         timerText.classList.remove('solid-color');
         timerText.style.color = '';
@@ -157,14 +170,16 @@
       }
 
       // Blinking
-      timerText.classList.toggle('blinking',
-        state.isBlinking || (state.isRunning && state.timeLeft > 0 && state.timeLeft <= 30));
+      if (state.isBlinking || (state.isRunning && state.timeLeft > 0 && state.timeLeft <= 30)) {
+        timerText.classList.add('blinking');
+      } else {
+        timerText.classList.remove('blinking');
+      }
 
       // Lock/unlock - toggle mouse events via Electron
       if (window.electronAPI && state.isLocked !== prevLocked) {
         window.electronAPI.setMouseEvents(state.isLocked);
         prevLocked = state.isLocked;
-        // Toggle drag region
         document.body.style.webkitAppRegion = state.isLocked ? 'no-drag' : 'drag';
       }
 
@@ -176,6 +191,13 @@
           (state.messagePosition === 'above' ? 'message-above' : 'message-below');
       } else {
         messageText.style.opacity = '0';
+      }
+    });
+
+    // Connection error handling
+    db.ref('.info/connected').on('value', function(snap) {
+      if (!snap.val() && !connected) {
+        timerText.innerHTML = '<span class="connecting">Connexion en cours...</span>';
       }
     });
   </script>

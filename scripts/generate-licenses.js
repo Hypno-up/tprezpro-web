@@ -14,7 +14,7 @@
 const https = require('https');
 const crypto = require('crypto');
 
-const FIREBASE_DB_URL = 'https://tprezpro-web-default-rtdb.firebaseio.com';
+const FIREBASE_DB_URL = 'https://tprezpro-web-default-rtdb.europe-west1.firebasedatabase.app';
 
 const args = process.argv.slice(2);
 const typeIdx = args.indexOf('--type');

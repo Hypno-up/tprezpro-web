@@ -1,7 +1,7 @@
 const https = require('https');
 
 // Firebase REST API
-const FIREBASE_DB_URL = 'https://tprezpro-web-default-rtdb.firebaseio.com';
+const FIREBASE_DB_URL = 'https://tprezpro-web-default-rtdb.europe-west1.firebasedatabase.app';
 
 function firebaseRequest(path, method = 'GET', data = null) {
   return new Promise((resolve, reject) => {
