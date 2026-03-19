@@ -262,16 +262,42 @@
       'text-9xl': 'size-text-9xl'
     };
 
-    // Listen to state changes
+    // Compute real timeLeft from server state
+    function computeTimeLeft(state) {
+      if (!state || !state.isRunning) return state ? state.timeLeft : 0;
+      const now = Date.now();
+      const elapsed = Math.floor((now - (state.lastTick || now)) / 1000);
+      return Math.max(0, (state.startedTimeLeft || state.timeLeft) - elapsed);
+    }
+
+    function formatTime(seconds) {
+      const min = Math.floor(seconds / 60);
+      const sec = seconds % 60;
+      return String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+    }
+
+    // Local tick: update display every second without waiting for Firebase
+    let currentState = null;
+    setInterval(() => {
+      if (!currentState || !currentState.isRunning) return;
+      const realTime = computeTimeLeft(currentState);
+      timerText.textContent = formatTime(realTime);
+      // Auto-stop at 0
+      if (realTime === 0) {
+        currentState.isRunning = false;
+      }
+    }, 1000);
+
+    // Listen to state changes from Firebase
     const stateRef = ref(db, `rooms/${roomCode}/state`);
     onValue(stateRef, (snapshot) => {
       const state = snapshot.val();
       if (!state) return;
+      currentState = state;
 
-      // Format time
-      const min = Math.floor(state.timeLeft / 60);
-      const sec = state.timeLeft % 60;
-      timerText.textContent = String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+      // Format time (compute real elapsed)
+      const realTime = computeTimeLeft(state);
+      timerText.textContent = formatTime(realTime);
 
       // Visibility
       if (state.isVisible) {
@@ -299,7 +325,7 @@
       timerContainer.style.opacity = (state.transparency || 100) / 100;
 
       // Blinking
-      if (state.isBlinking || (state.isRunning && state.timeLeft > 0 && state.timeLeft <= 30)) {
+      if (state.isBlinking || (state.isRunning && realTime > 0 && realTime <= 30)) {
         timerText.classList.add('blinking');
       } else {
         timerText.classList.remove('blinking');

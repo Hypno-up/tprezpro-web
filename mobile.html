@@ -347,6 +347,8 @@
     roomBadge.textContent = roomCode;
 
     // Firebase listener
+    import { computeTimeLeft } from '/js/timer-engine.js';
+
     onValue(stateRef, (snap) => {
       const state = snap.val();
       if (!state) return;
@@ -354,12 +356,20 @@
       renderState(state);
     });
 
+    // Local smooth tick
+    setInterval(() => {
+      const state = getLocalState();
+      if (!state || !state.isRunning) return;
+      renderState(state);
+    }, 1000);
+
     function renderState(state) {
-      const min = Math.floor(state.timeLeft / 60);
-      const sec = state.timeLeft % 60;
+      const realTime = computeTimeLeft(state);
+      const min = Math.floor(realTime / 60);
+      const sec = realTime % 60;
       timerDisplay.textContent = String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
 
-      const progress = state.totalTime > 0 ? (state.timeLeft / state.totalTime) * 100 : 0;
+      const progress = state.totalTime > 0 ? (realTime / state.totalTime) * 100 : 0;
       progressBar.style.width = progress + '%';
 
       visBtn.innerHTML = state.isVisible ? '&#x1F441;&#xFE0F; Visible' : '&#x1F648; Cache';

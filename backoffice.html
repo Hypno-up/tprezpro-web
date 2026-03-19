@@ -409,6 +409,8 @@
     updateLicenseUI();
 
     // ============ FIREBASE LISTENER ============
+    import { computeTimeLeft } from '/js/timer-engine.js';
+
     onValue(stateRef, (snap) => {
       const state = snap.val();
       if (!state) return;
@@ -416,14 +418,22 @@
       renderState(state);
     });
 
+    // Local tick: smooth countdown every second
+    setInterval(() => {
+      const state = getLocalState();
+      if (!state || !state.isRunning) return;
+      renderState(state);
+    }, 1000);
+
     function renderState(state) {
-      // Timer display
-      const min = Math.floor(state.timeLeft / 60);
-      const sec = state.timeLeft % 60;
+      // Timer display — compute real elapsed time
+      const realTime = computeTimeLeft(state);
+      const min = Math.floor(realTime / 60);
+      const sec = realTime % 60;
       timerDisplay.textContent = String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
 
       // Progress bar
-      const progress = state.totalTime > 0 ? (state.timeLeft / state.totalTime) * 100 : 0;
+      const progress = state.totalTime > 0 ? (realTime / state.totalTime) * 100 : 0;
       progressBar.style.width = progress + '%';
       if (progress > 50) progressBar.style.background = 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)';
       else if (progress > 25) progressBar.style.background = 'linear-gradient(90deg, #f093fb 0%, #f5576c 100%)';
