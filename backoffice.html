@@ -207,24 +207,12 @@
           </div>
         </div>
 
-        <!-- Timer Overlay Download -->
+        <!-- Timer Overlay -->
         <div class="glass-card p-3">
-          <label class="section-label">Timer Overlay</label>
-          <p class="text-gray-400 text-xs mb-2">Fenetre transparente par-dessus PowerPoint</p>
-          <div class="grid grid-cols-3 gap-2">
-            <a href="https://github.com/Hypno-up/tprezpro-web/releases/latest/download/Timer.Display-1.5.0-arm64.dmg"
-               class="btn btn-gray py-2 text-center text-xs no-underline block">
-              Mac (Apple Silicon)
-            </a>
-            <a href="https://github.com/Hypno-up/tprezpro-web/releases/latest/download/Timer.Display-1.5.0.dmg"
-               class="btn btn-gray py-2 text-center text-xs no-underline block">
-              Mac (Intel)
-            </a>
-            <a href="https://github.com/Hypno-up/tprezpro-web/releases/latest/download/Timer.Display.1.5.0.exe"
-               class="btn btn-gray py-2 text-center text-xs no-underline block">
-              Windows
-            </a>
-          </div>
+          <button id="overlay-guide-btn" class="btn btn-indigo w-full py-3">
+            <span style="font-size:1.2rem">&#x1F4BB;</span> Installer le Timer Overlay
+          </button>
+          <p class="text-gray-500 text-xs text-center mt-1">Fenetre transparente par-dessus PowerPoint</p>
         </div>
 
         <!-- License -->
@@ -263,6 +251,73 @@
         </div>
         <button onclick="document.getElementById('qr-modal').classList.add('hidden')" class="btn btn-dark px-5 py-2">Fermer</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Overlay Guide Modal -->
+  <div id="overlay-modal" class="modal-overlay hidden" onclick="document.getElementById('overlay-modal').classList.add('hidden')">
+    <div class="modal-content" onclick="event.stopPropagation()" style="max-width:500px;text-align:left;">
+      <h2 class="text-xl font-bold text-gray-800 mb-3 text-center">&#x1F4BB; Installer le Timer Overlay</h2>
+      <p class="text-xs text-gray-500 mb-4 text-center">Affiche un timer transparent par-dessus PowerPoint ou tout autre ecran</p>
+
+      <!-- Step 1 -->
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:0.8rem;margin-bottom:0.6rem;">
+        <div style="font-weight:700;color:#166534;font-size:0.85rem;margin-bottom:0.3rem;">1. Telecharger l'application</div>
+        <div style="display:flex;gap:0.4rem;flex-wrap:wrap;">
+          <a href="https://github.com/Hypno-up/tprezpro-web/releases/latest/download/Timer.Display-1.5.0-arm64.dmg"
+             style="flex:1;text-align:center;background:#22c55e;color:white;padding:0.4rem;border-radius:6px;font-size:0.75rem;font-weight:600;text-decoration:none;">
+            Mac (Apple Silicon)
+          </a>
+          <a href="https://github.com/Hypno-up/tprezpro-web/releases/latest/download/Timer.Display-1.5.0.dmg"
+             style="flex:1;text-align:center;background:#22c55e;color:white;padding:0.4rem;border-radius:6px;font-size:0.75rem;font-weight:600;text-decoration:none;">
+            Mac (Intel)
+          </a>
+          <a href="https://github.com/Hypno-up/tprezpro-web/releases/latest/download/Timer.Display.1.5.0.exe"
+             style="flex:1;text-align:center;background:#3b82f6;color:white;padding:0.4rem;border-radius:6px;font-size:0.75rem;font-weight:600;text-decoration:none;">
+            Windows
+          </a>
+        </div>
+      </div>
+
+      <!-- Step 2 Mac -->
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:0.8rem;margin-bottom:0.6rem;">
+        <div style="font-weight:700;color:#1e40af;font-size:0.85rem;margin-bottom:0.3rem;">2. Installer (Mac)</div>
+        <div style="font-size:0.75rem;color:#374151;line-height:1.5;">
+          &#x2022; Ouvrez le fichier <b>.dmg</b> telecharge<br>
+          &#x2022; Glissez <b>Timer Display</b> dans le dossier <b>Applications</b><br>
+          &#x2022; Si le message <i>"app endommagee"</i> apparait :<br>
+          <div style="background:#1e293b;color:#e2e8f0;padding:0.4rem 0.6rem;border-radius:4px;font-family:monospace;font-size:0.7rem;margin:0.3rem 0;cursor:pointer;position:relative;" onclick="navigator.clipboard.writeText('xattr -cr /Applications/Timer\\ Display.app');this.querySelector('.cp').textContent='Copie !';">
+            xattr -cr /Applications/Timer\ Display.app
+            <span class="cp" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);color:#8b5cf6;font-size:0.6rem;">Cliquer pour copier</span>
+          </div>
+          <span style="color:#6b7280;font-size:0.65rem;">Collez cette commande dans Terminal (une seule fois)</span>
+        </div>
+      </div>
+
+      <!-- Step 2 Windows -->
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:0.8rem;margin-bottom:0.6rem;">
+        <div style="font-weight:700;color:#1e40af;font-size:0.85rem;margin-bottom:0.3rem;">2. Installer (Windows)</div>
+        <div style="font-size:0.75rem;color:#374151;line-height:1.5;">
+          &#x2022; Double-cliquez le fichier <b>.exe</b><br>
+          &#x2022; Si Windows Defender bloque : <b>Informations complementaires</b> &rarr; <b>Executer quand meme</b>
+        </div>
+      </div>
+
+      <!-- Step 3 -->
+      <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;padding:0.8rem;margin-bottom:0.6rem;">
+        <div style="font-weight:700;color:#6b21a8;font-size:0.85rem;margin-bottom:0.3rem;">3. Connecter au BackOffice</div>
+        <div style="font-size:0.75rem;color:#374151;line-height:1.5;">
+          &#x2022; Lancez <b>Timer Display</b><br>
+          &#x2022; Entrez le code de salle : <b id="overlay-room-code" style="color:#8b5cf6;font-family:monospace;font-size:0.9rem;">----</b><br>
+          &#x2022; Le timer apparait en overlay transparent !<br>
+          &#x2022; Controlez tout depuis ce BackOffice
+        </div>
+      </div>
+
+      <button onclick="document.getElementById('overlay-modal').classList.add('hidden')"
+              style="width:100%;padding:0.5rem;background:#1e293b;color:white;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:0.85rem;">
+        Fermer
+      </button>
     </div>
   </div>
 
@@ -489,6 +544,12 @@
       document.getElementById('qr-image').src = qrAPI;
       document.getElementById('qr-url').textContent = dispURL;
       document.getElementById('qr-modal').classList.remove('hidden');
+    });
+
+    // ============ OVERLAY GUIDE ============
+    document.getElementById('overlay-guide-btn').addEventListener('click', () => {
+      document.getElementById('overlay-room-code').textContent = roomCode;
+      document.getElementById('overlay-modal').classList.remove('hidden');
     });
 
     // ============ KEYBOARD SHORTCUTS ============
