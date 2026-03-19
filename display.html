@@ -108,6 +108,33 @@
       margin-bottom: 1rem;
     }
 
+    /* Close button (Electron only) */
+    .close-btn {
+      position: fixed;
+      top: 6px;
+      left: 6px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: rgba(255, 59, 48, 0.15);
+      border: 1px solid rgba(255, 59, 48, 0.3);
+      color: rgba(255, 59, 48, 0.4);
+      font-size: 12px;
+      font-weight: bold;
+      cursor: pointer;
+      display: none; /* hidden by default, shown in Electron */
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      transition: all 0.2s;
+      line-height: 1;
+    }
+    .close-btn:hover {
+      background: rgba(255, 59, 48, 0.8);
+      color: white;
+      border-color: rgba(255, 59, 48, 0.9);
+    }
+
     /* Connection indicator */
     .connection-indicator {
       position: fixed;
@@ -159,6 +186,9 @@
   </style>
 </head>
 <body>
+
+  <!-- Close button (Electron overlay) -->
+  <button id="close-btn" class="close-btn" title="Fermer le timer">&#x2715;</button>
 
   <!-- Fullscreen prompt -->
   <div id="fullscreen-prompt" class="fullscreen-prompt">
@@ -354,6 +384,37 @@
           (state.messagePosition === 'above' ? 'message-above' : 'message-below');
       } else {
         messageText.style.opacity = '0';
+      }
+    });
+
+    // === Close button (Electron overlay) ===
+    const closeBtn = document.getElementById('close-btn');
+    const isElectron = !!(window.electronAPI);
+
+    if (isElectron) {
+      // Show close button in Electron
+      closeBtn.style.display = 'flex';
+
+      // Need to temporarily allow mouse events for the close button
+      closeBtn.addEventListener('mouseenter', () => {
+        if (window.electronAPI) window.electronAPI.setMouseEvents(false);
+      });
+      closeBtn.addEventListener('mouseleave', () => {
+        if (window.electronAPI) window.electronAPI.setMouseEvents(true);
+      });
+      closeBtn.addEventListener('click', () => {
+        window.close();
+      });
+
+      // Hide fullscreen prompt in Electron (not needed)
+      const fsPrompt = document.getElementById('fullscreen-prompt');
+      if (fsPrompt) fsPrompt.style.display = 'none';
+    }
+
+    // Keyboard shortcut: Escape to close
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        window.close();
       }
     });
   </script>

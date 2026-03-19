@@ -105,11 +105,12 @@ function createDisplayWindow() {
 
   displayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   displayWindow.setAlwaysOnTop(true, 'screen-saver', 1);
-  displayWindow.setIgnoreMouseEvents(true);
+  // Ignore mouse events but forward them so CSS :hover works on close button
+  displayWindow.setIgnoreMouseEvents(true, { forward: true });
 
   ipcMain.on('set-mouse-events', (event, ignore) => {
     if (displayWindow && !displayWindow.isDestroyed()) {
-      displayWindow.setIgnoreMouseEvents(ignore);
+      displayWindow.setIgnoreMouseEvents(ignore, ignore ? { forward: true } : {});
     }
   });
 
