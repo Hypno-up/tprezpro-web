@@ -315,14 +315,20 @@
     function startLocalTick() {
       if (localInterval) return;
       localInterval = setInterval(() => {
-        if (!currentState || !currentState.isRunning || displayTimeLeft <= 0) {
+        if (!currentState || !currentState.isRunning) {
           clearInterval(localInterval);
           localInterval = null;
           return;
         }
-        displayTimeLeft = Math.max(0, displayTimeLeft - 1);
+        // Always compute from timestamps — stays in sync
+        displayTimeLeft = computeTimeLeft(currentState);
         timerText.textContent = formatTime(displayTimeLeft);
-      }, 1000);
+        if (displayTimeLeft === 0) {
+          currentState.isRunning = false;
+          clearInterval(localInterval);
+          localInterval = null;
+        }
+      }, 500);
     }
 
     // Listen to state changes from Firebase
@@ -330,19 +336,19 @@
     onValue(stateRef, (snapshot) => {
       const state = snapshot.val();
       if (!state) return;
+
+      const wasRunning = currentState ? currentState.isRunning : false;
       currentState = state;
 
-      // Compute real time once on sync
-      const realTime = state.isRunning ? computeTimeLeft(state) : state.timeLeft;
-      displayTimeLeft = realTime;
-
-      if (state.isRunning && !localInterval) {
-        startLocalTick();
-      } else if (!state.isRunning && localInterval) {
-        clearInterval(localInterval);
-        localInterval = null;
+      if (state.isRunning) {
+        displayTimeLeft = computeTimeLeft(state);
+        timerText.textContent = formatTime(displayTimeLeft);
+        if (!localInterval) startLocalTick();
+      } else {
+        if (localInterval) { clearInterval(localInterval); localInterval = null; }
+        displayTimeLeft = state.timeLeft || 0;
+        timerText.textContent = formatTime(displayTimeLeft);
       }
-      timerText.textContent = formatTime(realTime);
 
       // Visibility
       if (state.isVisible) {

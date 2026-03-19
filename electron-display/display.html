@@ -130,6 +130,51 @@
 
     var prevLocked = true;
     var connected = false;
+    var currentState = null;
+    var localInterval = null;
+
+    // Compute time left from timestamps (same logic as timer-engine.js)
+    function computeTimeLeft(state) {
+      if (!state || !state.isRunning) return state ? (state.timeLeft || 0) : 0;
+      var now = Date.now();
+      var base = state.startedTimeLeft || state.timeLeft || 0;
+      var elapsed = Math.floor((now - (state.lastTick || now)) / 1000);
+      return Math.max(0, base - elapsed);
+    }
+
+    function renderTime(timeLeft) {
+      var min = Math.floor(timeLeft / 60);
+      var sec = timeLeft % 60;
+      timerText.textContent = String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+    }
+
+    function startLocalCountdown() {
+      stopLocalCountdown();
+      localInterval = setInterval(function() {
+        if (!currentState || !currentState.isRunning) {
+          stopLocalCountdown();
+          return;
+        }
+        var tl = computeTimeLeft(currentState);
+        renderTime(tl);
+        // Blinking when low
+        if (tl > 0 && tl <= 30) {
+          timerText.classList.add('blinking');
+        }
+        if (tl === 0) {
+          currentState.isRunning = false;
+          timerText.classList.remove('blinking');
+          stopLocalCountdown();
+        }
+      }, 500);
+    }
+
+    function stopLocalCountdown() {
+      if (localInterval) {
+        clearInterval(localInterval);
+        localInterval = null;
+      }
+    }
 
     // Listen to state
     db.ref('rooms/' + roomCode + '/state').on('value', function(snapshot) {
@@ -139,12 +184,19 @@
         return;
       }
 
+      var wasRunning = currentState ? currentState.isRunning : false;
+      var nowRunning = !!state.isRunning;
+      currentState = state;
       connected = true;
 
-      // Time display
-      var min = Math.floor(state.timeLeft / 60);
-      var sec = state.timeLeft % 60;
-      timerText.textContent = String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+      // Time display — use computeTimeLeft for running timers
+      if (nowRunning) {
+        renderTime(computeTimeLeft(state));
+        if (!localInterval) startLocalCountdown();
+      } else {
+        stopLocalCountdown();
+        renderTime(state.timeLeft || 0);
+      }
 
       // Visibility
       timerContainer.classList.toggle('hidden-state', !state.isVisible);
