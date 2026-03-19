@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Timer Pro - Mobile</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0c29 100%);
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color: white;
+      padding: 0.75rem;
+      overflow-x: hidden;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+    .header h1 { font-size: 1rem; }
+    .room-badge {
+      background: rgba(139,92,246,0.3);
+      border: 1px solid rgba(139,92,246,0.5);
+      padding: 0.2rem 0.6rem;
+      border-radius: 6px;
+      font-family: monospace;
+      font-weight: 700;
+      font-size: 0.8rem;
+      letter-spacing: 0.1em;
+      cursor: pointer;
+    }
+
+    /* Timer */
+    .timer-card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px;
+      padding: 1.5rem;
+      text-align: center;
+      margin-bottom: 0.75rem;
+    }
+    .timer-display {
+      font-size: 4rem;
+      font-weight: 800;
+      font-family: monospace;
+      letter-spacing: 0.05em;
+      background: linear-gradient(135deg, #667eea, #764ba2, #f093fb);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .progress-track {
+      height: 4px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 2px;
+      margin-top: 0.5rem;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea, #764ba2);
+      border-radius: 2px;
+      transition: width 0.3s;
+    }
+
+    /* Controls */
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+    .ctrl-btn {
+      padding: 1rem;
+      border: none;
+      border-radius: 12px;
+      font-size: 1.5rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.1s, opacity 0.2s;
+      color: white;
+    }
+    .ctrl-btn:active { transform: scale(0.95); }
+    .btn-start { background: #22c55e; }
+    .btn-pause { background: #eab308; }
+    .btn-reset { background: #ef4444; }
+
+    /* Card */
+    .card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 0.75rem;
+      margin-bottom: 0.6rem;
+    }
+    .card-title {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: rgba(255,255,255,0.4);
+      margin-bottom: 0.4rem;
+      font-weight: 600;
+    }
+
+    /* Quick times */
+    .quick-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.4rem;
+    }
+    .quick-btn {
+      padding: 0.6rem;
+      background: rgba(139,92,246,0.3);
+      border: 1px solid rgba(139,92,246,0.4);
+      border-radius: 8px;
+      color: white;
+      font-weight: 700;
+      font-size: 0.85rem;
+      cursor: pointer;
+      text-align: center;
+    }
+    .quick-btn:active { background: rgba(139,92,246,0.6); }
+
+    /* Toggle row */
+    .toggle-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.4rem;
+    }
+    .toggle-btn {
+      padding: 0.6rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: white;
+      text-align: center;
+    }
+    .toggle-btn:active { opacity: 0.8; }
+    .btn-indigo { background: rgba(99,102,241,0.5); border: 1px solid rgba(99,102,241,0.6); }
+    .btn-green { background: rgba(34,197,94,0.4); border: 1px solid rgba(34,197,94,0.5); }
+    .btn-purple { background: rgba(139,92,246,0.4); border: 1px solid rgba(139,92,246,0.5); }
+    .btn-gray { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15); }
+
+    /* Message */
+    .msg-row { display: flex; gap: 0.4rem; margin-bottom: 0.4rem; }
+    .msg-input {
+      flex: 1;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: white;
+      padding: 0.5rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      outline: none;
+    }
+    .msg-input:focus { border-color: #8b5cf6; }
+    .msg-clear {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: white;
+      padding: 0.5rem 0.75rem;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    /* Colors */
+    .color-row { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    .color-dot {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    .color-dot.active { border-color: white; }
+
+    /* Slider */
+    input[type="range"] {
+      width: 100%;
+      -webkit-appearance: none;
+      height: 6px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 3px;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #8b5cf6;
+      cursor: pointer;
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.8);
+      color: white;
+      padding: 0.5rem 1.5rem;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      z-index: 100;
+    }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <h1>Timer Pro</h1>
+    <div id="room-badge" class="room-badge"></div>
+  </div>
+
+  <!-- Timer -->
+  <div class="timer-card">
+    <div id="timer-display" class="timer-display">05:00</div>
+    <div class="progress-track">
+      <div id="progress-bar" class="progress-bar" style="width:100%"></div>
+    </div>
+  </div>
+
+  <!-- Main Controls -->
+  <div class="controls">
+    <button id="start-btn" class="ctrl-btn btn-start">&#x25B6;&#xFE0F;</button>
+    <button id="pause-btn" class="ctrl-btn btn-pause">&#x23F8;&#xFE0F;</button>
+    <button id="reset-btn" class="ctrl-btn btn-reset">&#x1F504;</button>
+  </div>
+
+  <!-- Quick Times -->
+  <div class="card">
+    <div class="card-title">Durees rapides</div>
+    <div class="quick-grid">
+      <button class="quick-btn" data-seconds="60">1 min</button>
+      <button class="quick-btn" data-seconds="120">2 min</button>
+      <button class="quick-btn" data-seconds="300">5 min</button>
+      <button class="quick-btn" data-seconds="600">10 min</button>
+      <button class="quick-btn" data-seconds="900">15 min</button>
+      <button class="quick-btn" data-seconds="1800">30 min</button>
+    </div>
+  </div>
+
+  <!-- Display -->
+  <div class="card">
+    <div class="card-title">Affichage</div>
+    <div class="toggle-row" style="margin-bottom:0.5rem;">
+      <button id="vis-btn" class="toggle-btn btn-indigo">&#x1F441;&#xFE0F; Visible</button>
+      <button id="lock-btn" class="toggle-btn btn-green">&#x1F512; Verrouille</button>
+    </div>
+    <div class="card-title">Transparence : <span id="transp-val">100</span>%</div>
+    <input id="transp-slider" type="range" min="10" max="100" value="100">
+  </div>
+
+  <!-- Message -->
+  <div class="card">
+    <div class="card-title">Message</div>
+    <div class="msg-row">
+      <input id="msg-input" class="msg-input" type="text" placeholder="Message..." maxlength="100">
+      <button id="msg-clear" class="msg-clear">&#x2716;</button>
+    </div>
+    <div class="toggle-row">
+      <button id="msg-above" class="toggle-btn btn-purple">&#x2B06; Dessus</button>
+      <button id="msg-below" class="toggle-btn btn-purple">&#x2B07; Dessous</button>
+    </div>
+  </div>
+
+  <!-- Colors -->
+  <div class="card">
+    <div class="card-title">Couleur</div>
+    <div class="color-row">
+      <div class="color-dot active" data-color="#22c55e" style="background:#22c55e"></div>
+      <div class="color-dot" data-color="#eab308" style="background:#eab308"></div>
+      <div class="color-dot" data-color="#ef4444" style="background:#ef4444"></div>
+      <div class="color-dot" data-color="#3b82f6" style="background:#3b82f6"></div>
+      <div class="color-dot" data-color="#ffffff" style="background:#ffffff"></div>
+      <div class="color-dot" data-color="" style="background:linear-gradient(135deg,#667eea,#764ba2,#f093fb)"></div>
+    </div>
+  </div>
+
+  <!-- Size -->
+  <div class="card">
+    <div class="card-title">Taille</div>
+    <div class="toggle-row" style="grid-template-columns:repeat(4,1fr);">
+      <button class="toggle-btn btn-gray size-btn" data-size="text-4xl">S</button>
+      <button class="toggle-btn btn-gray size-btn" data-size="text-6xl">M</button>
+      <button class="toggle-btn btn-gray size-btn" data-size="text-8xl">L</button>
+      <button class="toggle-btn btn-gray size-btn" data-size="text-9xl">XL</button>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+    import { getDatabase, ref, onValue, update, get } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+    import { firebaseConfig, initFirebase } from '/js/firebase-config.js';
+    import { getRoomCodeFromURL, DEFAULT_STATE } from '/js/room.js';
+    import {
+      initTimerEngine, startTimer, pauseTimer, resetTimer, setTime,
+      setColor, setSize, setTransparency, setVisibility, setMessage,
+      setMessagePosition, toggleLock, updateLocalState, getLocalState,
+      handleVisibilityChange
+    } from '/js/timer-engine.js';
+
+    // Room code
+    const roomCode = getRoomCodeFromURL();
+    if (!roomCode) {
+      window.location.href = '/';
+      throw new Error('No room code');
+    }
+
+    // Init Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    initFirebase({ initializeApp: () => app }, { getDatabase: () => db });
+
+    const stateRef = ref(db, `rooms/${roomCode}/state`);
+    const snapshot = await get(stateRef);
+    const initialState = snapshot.exists() ? { ...DEFAULT_STATE, ...snapshot.val() } : { ...DEFAULT_STATE };
+    initTimerEngine({ ref, update }, roomCode, initialState);
+
+    // Elements
+    const timerDisplay = document.getElementById('timer-display');
+    const progressBar = document.getElementById('progress-bar');
+    const roomBadge = document.getElementById('room-badge');
+    const visBtn = document.getElementById('vis-btn');
+    const lockBtn = document.getElementById('lock-btn');
+    const transpSlider = document.getElementById('transp-slider');
+    const transpVal = document.getElementById('transp-val');
+    const msgInput = document.getElementById('msg-input');
+    const toast = document.getElementById('toast');
+
+    roomBadge.textContent = roomCode;
+
+    // Firebase listener
+    onValue(stateRef, (snap) => {
+      const state = snap.val();
+      if (!state) return;
+      updateLocalState(state);
+      renderState(state);
+    });
+
+    function renderState(state) {
+      const min = Math.floor(state.timeLeft / 60);
+      const sec = state.timeLeft % 60;
+      timerDisplay.textContent = String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+
+      const progress = state.totalTime > 0 ? (state.timeLeft / state.totalTime) * 100 : 0;
+      progressBar.style.width = progress + '%';
+
+      visBtn.innerHTML = state.isVisible ? '&#x1F441;&#xFE0F; Visible' : '&#x1F648; Cache';
+      visBtn.className = state.isVisible ? 'toggle-btn btn-indigo' : 'toggle-btn btn-gray';
+
+      lockBtn.innerHTML = state.isLocked ? '&#x1F512; Verrouille' : '&#x1F513; Deverrouille';
+      lockBtn.className = state.isLocked ? 'toggle-btn btn-green' : 'toggle-btn btn-purple';
+
+      transpSlider.value = state.transparency || 100;
+      transpVal.textContent = state.transparency || 100;
+    }
+
+    // Controls
+    document.getElementById('start-btn').addEventListener('click', () => startTimer());
+    document.getElementById('pause-btn').addEventListener('click', () => pauseTimer());
+    document.getElementById('reset-btn').addEventListener('click', () => resetTimer());
+
+    // Quick times
+    document.querySelectorAll('.quick-btn').forEach(btn => {
+      btn.addEventListener('click', () => setTime(parseInt(btn.dataset.seconds)));
+    });
+
+    // Visibility & Lock
+    visBtn.addEventListener('click', () => {
+      const state = getLocalState();
+      setVisibility(!state.isVisible);
+    });
+    lockBtn.addEventListener('click', () => toggleLock());
+
+    // Transparency
+    transpSlider.addEventListener('input', (e) => {
+      transpVal.textContent = e.target.value;
+      setTransparency(parseInt(e.target.value));
+    });
+
+    // Message
+    msgInput.addEventListener('input', (e) => setMessage(e.target.value));
+    document.getElementById('msg-clear').addEventListener('click', () => {
+      msgInput.value = '';
+      setMessage('');
+    });
+    document.getElementById('msg-above').addEventListener('click', () => setMessagePosition('above'));
+    document.getElementById('msg-below').addEventListener('click', () => setMessagePosition('below'));
+
+    // Colors
+    document.querySelectorAll('.color-dot').forEach(dot => {
+      dot.addEventListener('click', () => {
+        document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active'));
+        dot.classList.add('active');
+        setColor(dot.dataset.color || null);
+      });
+    });
+
+    // Size
+    document.querySelectorAll('.size-btn').forEach(btn => {
+      btn.addEventListener('click', () => setSize(btn.dataset.size));
+    });
+
+    // Copy room code
+    roomBadge.addEventListener('click', () => {
+      navigator.clipboard.writeText(roomCode);
+      showToast('Code copie !');
+    });
+
+    // Tab visibility
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    function showToast(text) {
+      toast.textContent = text;
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 2000);
+    }
+  </script>
+</body>
+</html>

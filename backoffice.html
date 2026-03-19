@@ -193,7 +193,19 @@
               <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
               <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
             </svg>
-            <span data-i18n="show-qr">Afficher QR Code</span>
+            <span data-i18n="show-qr">QR Display</span>
+          </button>
+          <!-- Mobile control -->
+          <div class="mt-2">
+            <label class="text-xs text-gray-400 mb-1 block">Telecommande smartphone</label>
+            <div class="flex gap-2">
+              <div id="mobile-url" class="flex-1 text-center font-mono text-xs font-bold bg-purple-500 bg-opacity-20 text-purple-400 rounded-lg p-2 border border-purple-500 border-opacity-30 cursor-pointer hover:bg-opacity-30 transition-all truncate" title="Click to copy">
+              </div>
+              <button id="copy-mobile-btn" class="btn btn-purple px-3 text-sm">Copier</button>
+            </div>
+          </div>
+          <button id="show-mobile-qr-btn" class="btn btn-indigo w-full py-2 mt-2">
+            <span>&#x1F4F1;</span> QR Telecommande
           </button>
         </div>
 
@@ -374,12 +386,15 @@
     const transpValue = document.getElementById('transparency-value');
     const msgInput = document.getElementById('message-input');
     const licenseStatus = document.getElementById('license-status');
+    const mobileUrl = document.getElementById('mobile-url');
     const toast = document.getElementById('toast');
 
     // ============ SETUP ============
     roomBadge.textContent = roomCode;
     const dispURL = getDisplayURL(roomCode);
     displayUrl.textContent = dispURL;
+    const mobileControlURL = `${window.location.origin}/control/${roomCode}`;
+    mobileUrl.textContent = mobileControlURL;
 
     // Language
     const langSel = document.getElementById('language-selector');
@@ -543,6 +558,22 @@
       const qrAPI = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(dispURL)}`;
       document.getElementById('qr-image').src = qrAPI;
       document.getElementById('qr-url').textContent = dispURL;
+      document.getElementById('qr-modal').classList.remove('hidden');
+    });
+
+    // Mobile control
+    mobileUrl.addEventListener('click', () => {
+      navigator.clipboard.writeText(mobileControlURL);
+      showToast(t('copied'));
+    });
+    document.getElementById('copy-mobile-btn').addEventListener('click', () => {
+      navigator.clipboard.writeText(mobileControlURL);
+      showToast(t('copied'));
+    });
+    document.getElementById('show-mobile-qr-btn').addEventListener('click', () => {
+      const qrAPI = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(mobileControlURL)}`;
+      document.getElementById('qr-image').src = qrAPI;
+      document.getElementById('qr-url').textContent = mobileControlURL;
       document.getElementById('qr-modal').classList.remove('hidden');
     });
 

@@ -19,3 +19,9 @@
   from = "/admin/:code"
   to = "/backoffice.html?room=:code"
   status = 200
+
+# Nice URLs: /control/CODE -> mobile.html?room=CODE
+[[redirects]]
+  from = "/control/:code"
+  to = "/mobile.html?room=:code"
+  status = 200
