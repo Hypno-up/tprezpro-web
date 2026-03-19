@@ -1,6 +1,6 @@
 {
   "name": "tprezpro-display",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Timer Display overlay - transparent floating window synced with Firebase",
   "main": "main.js",
   "scripts": {
@@ -17,9 +17,14 @@
     "productName": "Timer Display",
     "mac": {
       "category": "public.app-category.productivity",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
       "target": [
         { "target": "dmg", "arch": ["x64", "arm64"] }
       ]
+    },
+    "dmg": {
+      "writeUpdateInfo": false
     },
     "win": {
       "target": [
