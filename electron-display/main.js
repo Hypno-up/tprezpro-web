@@ -137,18 +137,14 @@ function createRoomInputWindow() {
     }
   });
 
-  // Use loadFile instead of loadURL
-  inputWin.loadFile(path.join(__dirname, 'room-input.html'));
+  // Load connection page from Netlify (avoids file:// / asar issues)
+  inputWin.loadURL('https://tprezpro-web.netlify.app/electron-connect.html');
 
-  // Debug: open devtools in dev mode, log errors in production
+  // Fallback: if remote fails, try local
   inputWin.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-    console.error('Room input load failed:', errorCode, errorDescription);
+    console.error('Remote load failed, trying local:', errorCode, errorDescription);
+    inputWin.loadFile(path.join(__dirname, 'room-input.html'));
   });
-
-  // Show devtools if env is set (for debugging)
-  if (process.env.DEBUG_ELECTRON) {
-    inputWin.webContents.openDevTools({ mode: 'detach' });
-  }
 
   ipcMain.on('set-room-code', (event, code) => {
     roomCode = code;
