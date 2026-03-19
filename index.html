@@ -50,8 +50,8 @@
       <p id="join-error" class="text-red-400 text-sm mt-2 hidden"></p>
     </div>
 
-    <!-- Overlay Download -->
-    <div class="glass-card p-6 mb-4">
+    <!-- Overlay Download (hidden on mobile) -->
+    <div class="glass-card p-6 mb-4 hidden md:block">
       <div class="text-center mb-3">
         <span class="text-lg font-bold">Timer Overlay</span>
         <p class="text-gray-400 text-xs mt-1">Fenetre transparente par-dessus PowerPoint</p>
@@ -111,7 +111,8 @@
       btn.textContent = '...';
       try {
         const code = await createRoom({ ref, set, get });
-        window.location.href = `/admin/${code}`;
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        window.location.href = isMobile ? `/control/${code}` : `/admin/${code}`;
       } catch (err) {
         console.error('Error creating room:', err);
         btn.textContent = t('create-room');
@@ -140,7 +141,9 @@
       try {
         const exists = await roomExists({ ref, get }, code);
         if (exists) {
-          window.location.href = `/room/${code}`;
+          // Mobile -> control panel, Desktop -> display
+          const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+          window.location.href = isMobile ? `/control/${code}` : `/room/${code}`;
         } else {
           joinError.textContent = t('room-not-found');
           joinError.classList.remove('hidden');
