@@ -1,11 +1,74 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
+const crypto = require('crypto');
+const https = require('https');
+const os = require('os');
+const fs = require('fs');
 
 let displayWindow = null;
-
-// Room code from command line args or default
 const args = process.argv.slice(2);
 let roomCode = args[0] || '';
+
+// === Machine ID ===
+// Generates a unique ID based on hardware. Changes on reinstall (new app data path).
+function getMachineId() {
+  const appDataPath = app.getPath('userData');
+  const idFile = path.join(appDataPath, '.machine-id');
+
+  // Check for existing ID
+  if (fs.existsSync(idFile)) {
+    return fs.readFileSync(idFile, 'utf8').trim();
+  }
+
+  // Generate new: hash of hostname + username + app path (changes on reinstall)
+  const raw = `${os.hostname()}-${os.userInfo().username}-${appDataPath}-${Date.now()}`;
+  const id = crypto.createHash('sha256').update(raw).digest('hex').substring(0, 16);
+  fs.writeFileSync(idFile, id, 'utf8');
+  return id;
+}
+
+// === License storage ===
+function getLicensePath() {
+  return path.join(app.getPath('userData'), 'license.json');
+}
+
+function getStoredLicense() {
+  try {
+    const data = fs.readFileSync(getLicensePath(), 'utf8');
+    return JSON.parse(data);
+  } catch {
+    return null;
+  }
+}
+
+function storeLicense(key, data) {
+  fs.writeFileSync(getLicensePath(), JSON.stringify({ key, ...data }), 'utf8');
+}
+
+// === Validate with server ===
+function validateLicenseOnServer(licenseKey, machineId) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({ licenseKey, machineId });
+    const req = https.request({
+      hostname: 'tprezpro-web.netlify.app',
+      path: '/.netlify/functions/validate-license',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+    }, (res) => {
+      let d = '';
+      res.on('data', c => d += c);
+      res.on('end', () => {
+        try { resolve(JSON.parse(d)); }
+        catch { reject(new Error('Invalid response')); }
+      });
+    });
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+// === Windows ===
 
 function createDisplayWindow() {
   displayWindow = new BrowserWindow({
@@ -29,7 +92,6 @@ function createDisplayWindow() {
     }
   });
 
-  // Load display page with room code
   const displayURL = `file://${path.join(__dirname, 'display.html')}?room=${roomCode}`;
   displayWindow.loadURL(displayURL);
 
@@ -41,7 +103,6 @@ function createDisplayWindow() {
   displayWindow.setAlwaysOnTop(true, 'screen-saver', 1);
   displayWindow.setIgnoreMouseEvents(true);
 
-  // IPC handlers for lock/unlock from Firebase state
   ipcMain.on('set-mouse-events', (event, ignore) => {
     if (displayWindow && !displayWindow.isDestroyed()) {
       displayWindow.setIgnoreMouseEvents(ignore);
@@ -60,11 +121,10 @@ function createDisplayWindow() {
   });
 }
 
-// Show room code input if not provided
 function createRoomInputWindow() {
   const inputWin = new BrowserWindow({
-    width: 400,
-    height: 250,
+    width: 450,
+    height: 500,
     resizable: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -85,6 +145,40 @@ function createRoomInputWindow() {
     if (!displayWindow) app.quit();
   });
 }
+
+// === IPC Handlers ===
+
+ipcMain.handle('get-machine-id', () => {
+  return getMachineId();
+});
+
+ipcMain.handle('get-license-status', () => {
+  const stored = getStoredLicense();
+  if (!stored) return { valid: false };
+
+  // Check local expiry
+  if (stored.expiresAt && new Date(stored.expiresAt) < new Date()) {
+    return { valid: false, error: 'Cle expiree' };
+  }
+
+  return { valid: true, ...stored };
+});
+
+ipcMain.handle('validate-license', async (event, key) => {
+  try {
+    const machineId = getMachineId();
+    const result = await validateLicenseOnServer(key, machineId);
+
+    if (result.valid) {
+      storeLicense(key, result.data);
+    }
+    return result;
+  } catch (err) {
+    return { valid: false, error: 'Erreur reseau: ' + err.message };
+  }
+});
+
+// === App Start ===
 
 app.whenReady().then(() => {
   if (roomCode) {

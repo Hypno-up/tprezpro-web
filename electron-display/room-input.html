@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <title>Timer Display - Room Code</title>
+  <title>Timer Display - Connexion</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -14,68 +14,217 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       color: white;
     }
-    .container {
-      text-align: center;
-      padding: 2rem;
-    }
-    h1 {
-      font-size: 1.3rem;
+    .container { text-align: center; padding: 2rem; width: 380px; }
+    h1 { font-size: 1.3rem; margin-bottom: 0.3rem; }
+    .subtitle { color: rgba(255,255,255,0.5); font-size: 0.75rem; margin-bottom: 1.5rem; }
+
+    .section { margin-bottom: 1.5rem; }
+    .section-title {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: rgba(255,255,255,0.4);
       margin-bottom: 0.5rem;
     }
-    p {
-      color: rgba(255,255,255,0.6);
-      font-size: 0.85rem;
-      margin-bottom: 1.5rem;
-    }
+
     input {
       background: rgba(255,255,255,0.1);
-      border: 2px solid rgba(139,92,246,0.4);
+      border: 2px solid rgba(139,92,246,0.3);
       color: white;
-      padding: 0.75rem 1rem;
-      border-radius: 10px;
-      font-size: 1.5rem;
-      font-family: monospace;
+      padding: 0.65rem 0.8rem;
+      border-radius: 8px;
+      font-size: 1rem;
       text-align: center;
-      letter-spacing: 0.2em;
-      width: 220px;
+      width: 100%;
       outline: none;
-      text-transform: uppercase;
+      transition: border-color 0.2s;
     }
     input:focus { border-color: #8b5cf6; }
+    input.code-input {
+      font-family: monospace;
+      font-size: 1.4rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+    input.license-input {
+      font-family: monospace;
+      font-size: 0.85rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
     button {
       display: block;
-      margin: 1rem auto 0;
-      padding: 0.6rem 2rem;
-      background: #8b5cf6;
+      width: 100%;
+      margin-top: 0.5rem;
+      padding: 0.6rem;
       color: white;
       border: none;
       border-radius: 8px;
-      font-size: 1rem;
+      font-size: 0.9rem;
       font-weight: 600;
       cursor: pointer;
+      transition: background 0.2s;
     }
-    button:hover { background: #7c3aed; }
+    .btn-purple { background: #8b5cf6; }
+    .btn-purple:hover { background: #7c3aed; }
+    .btn-green { background: #22c55e; }
+    .btn-green:hover { background: #16a34a; }
+    .btn-purple:disabled, .btn-green:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .status {
+      margin-top: 0.5rem;
+      font-size: 0.75rem;
+      min-height: 1.2rem;
+    }
+    .status.ok { color: #4ade80; }
+    .status.err { color: #f87171; }
+    .status.info { color: #a78bfa; }
+
+    .license-badge {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 20px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+    .badge-valid { background: rgba(34,197,94,0.2); color: #4ade80; border: 1px solid rgba(34,197,94,0.3); }
+    .badge-expired { background: rgba(248,113,113,0.2); color: #f87171; border: 1px solid rgba(248,113,113,0.3); }
+    .badge-none { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.5); border: 1px solid rgba(255,255,255,0.15); }
+
+    .divider {
+      border: none;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      margin: 1.2rem 0;
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Timer Display</h1>
-    <p>Entrez le code de salle du BackOffice</p>
-    <input id="code" type="text" maxlength="6" placeholder="CODE" autofocus>
-    <button id="go">Connecter</button>
+    <p class="subtitle">Overlay transparent pour presentations</p>
+
+    <!-- License Section -->
+    <div class="section">
+      <div id="license-badge" class="license-badge badge-none">Pas de licence</div>
+      <div id="license-form">
+        <div class="section-title">Cle de licence</div>
+        <input id="license-key" class="license-input" type="text" maxlength="14" placeholder="TPRO-XXXX-XXXX">
+        <button id="activate-btn" class="btn-purple">Activer</button>
+        <div id="license-status" class="status"></div>
+      </div>
+      <div id="license-info" class="hidden">
+        <div id="license-expiry" class="status info"></div>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <!-- Room Code Section -->
+    <div class="section">
+      <div class="section-title">Code de salle</div>
+      <input id="code" class="code-input" type="text" maxlength="6" placeholder="CODE" autofocus>
+      <button id="go" class="btn-green" disabled>Connecter</button>
+      <div id="room-status" class="status"></div>
+    </div>
   </div>
+
   <script>
-    const input = document.getElementById('code');
-    const btn = document.getElementById('go');
-    input.addEventListener('input', () => { input.value = input.value.toUpperCase(); });
+    const licenseKey = document.getElementById('license-key');
+    const activateBtn = document.getElementById('activate-btn');
+    const licenseBadge = document.getElementById('license-badge');
+    const licenseStatus = document.getElementById('license-status');
+    const licenseForm = document.getElementById('license-form');
+    const licenseInfo = document.getElementById('license-info');
+    const licenseExpiry = document.getElementById('license-expiry');
+    const codeInput = document.getElementById('code');
+    const goBtn = document.getElementById('go');
+    const roomStatus = document.getElementById('room-status');
+
+    let isLicensed = false;
+
+    // Auto uppercase
+    licenseKey.addEventListener('input', () => { licenseKey.value = licenseKey.value.toUpperCase(); });
+    codeInput.addEventListener('input', () => { codeInput.value = codeInput.value.toUpperCase(); });
+
+    // Check existing license on load
+    async function checkExistingLicense() {
+      if (!window.electronAPI) return;
+      const status = await window.electronAPI.getLicenseStatus();
+      if (status.valid) {
+        showLicenseValid(status);
+      }
+    }
+
+    function showLicenseValid(data) {
+      isLicensed = true;
+      licenseBadge.textContent = `Licence active (${data.plan === 'multi' ? '3 jours' : '1 jour'})`;
+      licenseBadge.className = 'license-badge badge-valid';
+      licenseForm.style.display = 'none';
+      licenseInfo.classList.remove('hidden');
+      goBtn.disabled = false;
+
+      if (data.expiresAt) {
+        const exp = new Date(data.expiresAt);
+        const hoursLeft = data.hoursLeft || ((exp - new Date()) / 3600000).toFixed(1);
+        licenseExpiry.textContent = `Expire dans ${hoursLeft}h`;
+      }
+    }
+
+    function showLicenseExpired() {
+      licenseBadge.textContent = 'Licence expiree';
+      licenseBadge.className = 'license-badge badge-expired';
+      goBtn.disabled = true;
+    }
+
+    // Activate license
+    activateBtn.addEventListener('click', async () => {
+      const key = licenseKey.value.trim().toUpperCase();
+      if (!key) return;
+
+      activateBtn.disabled = true;
+      activateBtn.textContent = '...';
+      licenseStatus.textContent = '';
+
+      const result = await window.electronAPI.submitLicense(key);
+
+      if (result.valid) {
+        licenseStatus.textContent = 'Licence activee !';
+        licenseStatus.className = 'status ok';
+        showLicenseValid(result.data);
+      } else {
+        licenseStatus.textContent = result.error || 'Cle invalide';
+        licenseStatus.className = 'status err';
+      }
+
+      activateBtn.disabled = false;
+      activateBtn.textContent = 'Activer';
+    });
+
+    // Connect to room
     function connect() {
-      const code = input.value.trim().toUpperCase();
+      const code = codeInput.value.trim().toUpperCase();
+      if (!isLicensed) {
+        roomStatus.textContent = 'Veuillez activer une licence';
+        roomStatus.className = 'status err';
+        return;
+      }
       if (code.length >= 4 && window.electronAPI) {
+        goBtn.disabled = true;
+        goBtn.textContent = 'Connexion...';
         window.electronAPI.setRoomCode(code);
       }
     }
-    btn.addEventListener('click', connect);
-    input.addEventListener('keypress', (e) => { if (e.key === 'Enter') connect(); });
+
+    goBtn.addEventListener('click', connect);
+    codeInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') connect(); });
+
+    // Init
+    checkExistingLicense();
   </script>
 </body>
 </html>

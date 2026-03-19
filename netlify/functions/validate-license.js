@@ -1,6 +1,30 @@
-const crypto = require('crypto');
+const https = require('https');
 
-const SECRET_KEY = process.env.LICENSE_SECRET || '@Lejouroujesuisdevenumillionnaire!';
+// Firebase REST API
+const FIREBASE_DB_URL = 'https://tprezpro-web-default-rtdb.firebaseio.com';
+
+function firebaseRequest(path, method = 'GET', data = null) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(`${FIREBASE_DB_URL}${path}.json`);
+    const options = {
+      hostname: url.hostname,
+      path: url.pathname + url.search,
+      method,
+      headers: { 'Content-Type': 'application/json' }
+    };
+    const req = https.request(options, (res) => {
+      let body = '';
+      res.on('data', c => body += c);
+      res.on('end', () => {
+        try { resolve(JSON.parse(body)); }
+        catch { resolve(body); }
+      });
+    });
+    req.on('error', reject);
+    if (data) req.write(JSON.stringify(data));
+    req.end();
+  });
+}
 
 exports.handler = async (event) => {
   const headers = {
@@ -19,57 +43,78 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { licenseKey } = JSON.parse(event.body);
+    const { licenseKey, machineId } = JSON.parse(event.body);
 
     if (!licenseKey || typeof licenseKey !== 'string') {
-      return { statusCode: 400, headers, body: JSON.stringify({ valid: false, error: 'Missing license key' }) };
+      return { statusCode: 400, headers, body: JSON.stringify({ valid: false, error: 'Cle manquante' }) };
     }
 
-    const lastDash = licenseKey.lastIndexOf('-');
-    if (lastDash === -1) {
-      return { statusCode: 200, headers, body: JSON.stringify({ valid: false, error: 'Invalid key format' }) };
+    // Lookup license in Firebase
+    const license = await firebaseRequest(`/licenses/${licenseKey.toUpperCase()}`);
+
+    if (!license || license === 'null') {
+      return { statusCode: 200, headers, body: JSON.stringify({ valid: false, error: 'Cle invalide' }) };
     }
 
-    const payload = licenseKey.substring(0, lastDash);
-    const signature = licenseKey.substring(lastDash + 1);
-
-    // Verify HMAC signature
-    const expectedSignature = crypto
-      .createHmac('sha256', SECRET_KEY)
-      .update(payload)
-      .digest('hex');
-
-    if (signature !== expectedSignature) {
-      return { statusCode: 200, headers, body: JSON.stringify({ valid: false, error: 'Invalid signature' }) };
+    // Check if already used (different machine)
+    if (license.machineId && machineId && license.machineId !== machineId) {
+      return { statusCode: 200, headers, body: JSON.stringify({ valid: false, error: 'Cle deja utilisee sur un autre appareil' }) };
     }
 
-    // Decode payload
-    let data;
-    try {
-      data = JSON.parse(Buffer.from(payload, 'base64').toString('utf-8'));
-    } catch {
-      return { statusCode: 200, headers, body: JSON.stringify({ valid: false, error: 'Invalid payload encoding' }) };
+    // Check expiry
+    if (license.activatedAt) {
+      const activated = new Date(license.activatedAt);
+      const now = new Date();
+      const hoursElapsed = (now - activated) / (1000 * 60 * 60);
+      const durationHours = license.durationHours || 24;
+
+      if (hoursElapsed > durationHours) {
+        // Mark as expired
+        await firebaseRequest(`/licenses/${licenseKey.toUpperCase()}`, 'PATCH', { expired: true });
+        return { statusCode: 200, headers, body: JSON.stringify({ valid: false, error: 'Cle expiree' }) };
+      }
+
+      // Still valid
+      const expiresAt = new Date(activated.getTime() + durationHours * 60 * 60 * 1000);
+      return {
+        statusCode: 200, headers,
+        body: JSON.stringify({
+          valid: true,
+          data: {
+            plan: license.plan || 'day',
+            expiresAt: expiresAt.toISOString(),
+            durationHours,
+            hoursLeft: Math.max(0, durationHours - hoursElapsed).toFixed(1)
+          }
+        })
+      };
     }
 
-    // Check expiration
-    if (data.expires && new Date(data.expires) < new Date()) {
-      return { statusCode: 200, headers, body: JSON.stringify({ valid: false, error: 'License expired' }) };
-    }
+    // First activation — bind to machine and start timer
+    const now = new Date();
+    const durationHours = license.durationHours || 24;
+    const expiresAt = new Date(now.getTime() + durationHours * 60 * 60 * 1000);
+
+    await firebaseRequest(`/licenses/${licenseKey.toUpperCase()}`, 'PATCH', {
+      activatedAt: now.toISOString(),
+      machineId: machineId || 'web-' + Date.now(),
+      expired: false
+    });
 
     return {
-      statusCode: 200,
-      headers,
+      statusCode: 200, headers,
       body: JSON.stringify({
         valid: true,
         data: {
-          email: data.email || data.customer || 'Unknown',
-          plan: data.plan || 'pro',
-          expires: data.expires || null
+          plan: license.plan || 'day',
+          expiresAt: expiresAt.toISOString(),
+          durationHours,
+          hoursLeft: durationHours
         }
       })
     };
 
   } catch (err) {
-    return { statusCode: 500, headers, body: JSON.stringify({ valid: false, error: 'Server error' }) };
+    return { statusCode: 500, headers, body: JSON.stringify({ valid: false, error: 'Erreur serveur: ' + err.message }) };
   }
 };
