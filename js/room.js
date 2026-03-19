@@ -87,8 +87,8 @@ export function getRoomCodeFromURL() {
   const fromParam = params.get('room');
   if (fromParam) return fromParam;
 
-  // Check path pattern: /admin/CODE or /room/CODE
-  const pathMatch = window.location.pathname.match(/^\/(admin|room)\/([A-Za-z0-9]+)/);
+  // Check path pattern: /admin/CODE, /room/CODE, or /control/CODE
+  const pathMatch = window.location.pathname.match(/^\/(admin|room|control)\/([A-Za-z0-9]+)/);
   if (pathMatch) return pathMatch[2];
 
   return null;
