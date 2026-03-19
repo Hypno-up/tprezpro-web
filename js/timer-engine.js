@@ -39,11 +39,12 @@ export function computeTimeLeft(state) {
 function startLocalCountdown() {
   stopLocalCountdown();
   localCountdown = setInterval(() => {
-    if (!localState.isRunning || localState.timeLeft <= 0) {
+    if (!localState.isRunning) {
       stopLocalCountdown();
       return;
     }
-    localState.timeLeft = Math.max(0, localState.timeLeft - 1);
+    // Always compute from timestamps — no drift, no delay
+    localState.timeLeft = computeTimeLeft(localState);
 
     if (localState.autoBlinkSeconds > 0 && localState.timeLeft <= localState.autoBlinkSeconds) {
       localState.isBlinking = true;
@@ -53,10 +54,9 @@ function startLocalCountdown() {
       localState.isRunning = false;
       localState.isBlinking = false;
       stopLocalCountdown();
-      // Write final state
       writeState({ timeLeft: 0, isRunning: false, isBlinking: false });
     }
-  }, 1000);
+  }, 500); // 500ms for smoother updates
 }
 
 function stopLocalCountdown() {
