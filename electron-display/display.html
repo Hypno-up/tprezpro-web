@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Timer Display</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      background: transparent;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      -webkit-app-region: drag;
+    }
+
+    .timer-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+
+    .timer-container.hidden-state {
+      opacity: 0;
+      transform: scale(0.8);
+    }
+
+    .timer-text {
+      font-weight: 900;
+      letter-spacing: 0.05em;
+      font-variant-numeric: tabular-nums;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      filter: drop-shadow(0 0 30px rgba(102, 126, 234, 0.5));
+      transition: font-size 0.3s ease;
+    }
+
+    .timer-text.solid-color {
+      -webkit-text-fill-color: currentColor;
+      background: none;
+    }
+
+    .size-text-4xl { font-size: 3rem; }
+    .size-text-6xl { font-size: 5rem; }
+    .size-text-8xl { font-size: 8rem; }
+    .size-text-9xl { font-size: 12rem; }
+
+    .message-text {
+      font-size: 2rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      max-width: 90vw;
+      text-align: center;
+      word-wrap: break-word;
+      transition: opacity 0.3s ease;
+    }
+
+    .message-above { order: -1; margin-bottom: 1rem; }
+    .message-below { order: 1; margin-top: 1rem; }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    .blinking { animation: blink 1s ease-in-out infinite; }
+  </style>
+</head>
+<body>
+
+  <div id="timer-container" class="timer-container">
+    <div id="message-text" class="message-text message-below" style="opacity:0;"></div>
+    <div id="timer-text" class="timer-text size-text-6xl">05:00</div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+    import { getDatabase, ref, onValue } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCnV7heF2vU2tA7uOTrf4tEamVW73yUp1o",
+      authDomain: "tprezpro-web.firebaseapp.com",
+      databaseURL: "https://tprezpro-web-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "tprezpro-web",
+      storageBucket: "tprezpro-web.firebasestorage.app",
+      messagingSenderId: "190667786733",
+      appId: "1:190667786733:web:dcd2a2d52855ca63cc7fe4"
+    };
+
+    // Get room code from URL
+    const params = new URLSearchParams(window.location.search);
+    const roomCode = params.get('room');
+    if (!roomCode) {
+      document.body.innerHTML = '<div style="color:white;text-align:center;padding:2rem;"><h1>No room code</h1></div>';
+      throw new Error('No room code');
+    }
+
+    // Init Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const timerContainer = document.getElementById('timer-container');
+    const timerText = document.getElementById('timer-text');
+    const messageText = document.getElementById('message-text');
+
+    const sizeMap = {
+      'text-4xl': 'size-text-4xl',
+      'text-6xl': 'size-text-6xl',
+      'text-8xl': 'size-text-8xl',
+      'text-9xl': 'size-text-9xl'
+    };
+
+    let prevLocked = true;
+
+    // Listen to state
+    const stateRef = ref(db, `rooms/${roomCode}/state`);
+    onValue(stateRef, (snapshot) => {
+      const state = snapshot.val();
+      if (!state) return;
+
+      // Time display
+      const min = Math.floor(state.timeLeft / 60);
+      const sec = state.timeLeft % 60;
+      timerText.textContent = String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+
+      // Visibility
+      timerContainer.classList.toggle('hidden-state', !state.isVisible);
+
+      // Color
+      if (state.color) {
+        timerText.classList.add('solid-color');
+        timerText.style.color = state.color;
+        timerText.style.filter = `drop-shadow(0 0 30px ${state.color}80)`;
+      } else {
+        timerText.classList.remove('solid-color');
+        timerText.style.color = '';
+        timerText.style.filter = 'drop-shadow(0 0 30px rgba(102, 126, 234, 0.5))';
+      }
+
+      // Size
+      timerText.className = 'timer-text ' + (sizeMap[state.size] || 'size-text-6xl');
+      if (state.color) timerText.classList.add('solid-color');
+
+      // Transparency - use Electron API for real window transparency
+      if (window.electronAPI) {
+        window.electronAPI.setOpacity((state.transparency || 100) / 100);
+      }
+
+      // Blinking
+      timerText.classList.toggle('blinking',
+        state.isBlinking || (state.isRunning && state.timeLeft > 0 && state.timeLeft <= 30));
+
+      // Lock/unlock - toggle mouse events via Electron
+      if (window.electronAPI && state.isLocked !== prevLocked) {
+        window.electronAPI.setMouseEvents(state.isLocked);
+        prevLocked = state.isLocked;
+        // Toggle drag region
+        document.body.style.webkitAppRegion = state.isLocked ? 'no-drag' : 'drag';
+      }
+
+      // Message
+      if (state.message && state.message.trim()) {
+        messageText.textContent = state.message;
+        messageText.style.opacity = '1';
+        messageText.className = 'message-text ' +
+          (state.messagePosition === 'above' ? 'message-above' : 'message-below');
+      } else {
+        messageText.style.opacity = '0';
+      }
+    });
+  </script>
+</body>
+</html>

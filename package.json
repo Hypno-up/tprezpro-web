@@ -1,0 +1,9 @@
+{
+  "name": "tprezpro-web",
+  "version": "1.0.0",
+  "description": "Timer Presentation Pro - Web version with Firebase real-time sync",
+  "scripts": {
+    "dev": "npx serve . -p 8888"
+  },
+  "dependencies": {}
+}

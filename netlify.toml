@@ -1,0 +1,21 @@
+[build]
+  publish = "."
+  functions = "netlify/functions"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+
+# Nice URLs: /room/CODE -> display.html?room=CODE
+[[redirects]]
+  from = "/room/:code"
+  to = "/display.html?room=:code"
+  status = 200
+
+# Nice URLs: /admin/CODE -> backoffice.html?room=CODE
+[[redirects]]
+  from = "/admin/:code"
+  to = "/backoffice.html?room=:code"
+  status = 200

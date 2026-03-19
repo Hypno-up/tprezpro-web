@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Timer Display</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #000;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    .timer-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+
+    .timer-container.hidden-state {
+      opacity: 0;
+      transform: scale(0.8);
+    }
+
+    .timer-text {
+      font-weight: 900;
+      letter-spacing: 0.05em;
+      font-variant-numeric: tabular-nums;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      filter: drop-shadow(0 0 30px rgba(102, 126, 234, 0.5));
+      transition: font-size 0.3s ease;
+    }
+
+    .timer-text.solid-color {
+      -webkit-text-fill-color: currentColor;
+      background: none;
+    }
+
+    /* Size classes */
+    .size-text-4xl { font-size: 3rem; }
+    .size-text-6xl { font-size: 5rem; }
+    .size-text-8xl { font-size: 8rem; }
+    .size-text-9xl { font-size: 12rem; }
+
+    .message-text {
+      font-size: 2rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      max-width: 90vw;
+      text-align: center;
+      word-wrap: break-word;
+      transition: opacity 0.3s ease;
+    }
+
+    .message-above { order: -1; margin-bottom: 1rem; }
+    .message-below { order: 1; margin-top: 1rem; }
+
+    /* Warning blink animation */
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    .blinking { animation: blink 1s ease-in-out infinite; }
+
+    /* Fullscreen prompt */
+    .fullscreen-prompt {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.9);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      cursor: pointer;
+      transition: opacity 0.5s ease;
+    }
+
+    .fullscreen-prompt h2 {
+      color: white;
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+
+    .fullscreen-prompt p {
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 1rem;
+    }
+
+    .fullscreen-icon {
+      font-size: 4rem;
+      margin-bottom: 1rem;
+    }
+
+    /* Connection indicator */
+    .connection-indicator {
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      opacity: 0.6;
+      transition: opacity 0.3s;
+      z-index: 50;
+    }
+
+    .connection-indicator:hover { opacity: 1; }
+
+    .connection-indicator.connected {
+      background: rgba(34, 197, 94, 0.2);
+      color: #22c55e;
+    }
+
+    .connection-indicator.disconnected {
+      background: rgba(239, 68, 68, 0.2);
+      color: #ef4444;
+      opacity: 1;
+    }
+
+    .conn-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    /* Room info */
+    .room-info {
+      position: fixed;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255, 255, 255, 0.15);
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      z-index: 50;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Fullscreen prompt -->
+  <div id="fullscreen-prompt" class="fullscreen-prompt">
+    <div class="fullscreen-icon">&#x26F6;</div>
+    <h2 id="fs-text">Cliquer pour passer en plein ecran</h2>
+    <p id="fs-subtext">ou appuyez sur F11</p>
+  </div>
+
+  <!-- Connection indicator -->
+  <div id="connection-indicator" class="connection-indicator disconnected">
+    <span class="conn-dot"></span>
+    <span id="conn-text">Connexion...</span>
+  </div>
+
+  <!-- Timer -->
+  <div id="timer-container" class="timer-container">
+    <div id="message-text" class="message-text message-below" style="opacity:0;"></div>
+    <div id="timer-text" class="timer-text size-text-6xl">05:00</div>
+  </div>
+
+  <!-- Room info -->
+  <div id="room-info" class="room-info"></div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+    import { getDatabase, ref, onValue } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+    import { firebaseConfig, initFirebase } from '/js/firebase-config.js';
+    import { getRoomCodeFromURL } from '/js/room.js';
+    import { getLanguage } from '/js/i18n.js';
+
+    // Get room code
+    const roomCode = getRoomCodeFromURL();
+    if (!roomCode) {
+      document.body.innerHTML = '<div style="color:white;text-align:center;padding:2rem;"><h1>No room code</h1><p>Use a link like /room/ABC123</p></div>';
+      throw new Error('No room code');
+    }
+
+    // Init Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    initFirebase({ initializeApp: () => app }, { getDatabase: () => db });
+
+    // Elements
+    const timerContainer = document.getElementById('timer-container');
+    const timerText = document.getElementById('timer-text');
+    const messageText = document.getElementById('message-text');
+    const connIndicator = document.getElementById('connection-indicator');
+    const connText = document.getElementById('conn-text');
+    const roomInfo = document.getElementById('room-info');
+    const fsPrompt = document.getElementById('fullscreen-prompt');
+
+    // i18n
+    const lang = getLanguage();
+    if (lang === 'en') {
+      document.getElementById('fs-text').textContent = 'Click to enter fullscreen';
+      document.getElementById('fs-subtext').textContent = 'or press F11';
+    }
+
+    // Room info
+    roomInfo.textContent = `Room: ${roomCode}`;
+
+    // Fullscreen
+    fsPrompt.addEventListener('click', () => {
+      document.documentElement.requestFullscreen?.() ||
+      document.documentElement.webkitRequestFullscreen?.();
+      fsPrompt.style.opacity = '0';
+      setTimeout(() => fsPrompt.style.display = 'none', 500);
+    });
+
+    // Allow dismissing with any key
+    document.addEventListener('keydown', (e) => {
+      if (fsPrompt.style.display !== 'none') {
+        if (e.key === 'Escape') {
+          fsPrompt.style.opacity = '0';
+          setTimeout(() => fsPrompt.style.display = 'none', 500);
+        } else if (e.key === 'F11' || e.key === 'f') {
+          document.documentElement.requestFullscreen?.();
+          fsPrompt.style.opacity = '0';
+          setTimeout(() => fsPrompt.style.display = 'none', 500);
+        }
+      }
+    });
+
+    // Connection monitoring
+    const connRef = ref(db, '.info/connected');
+    onValue(connRef, (snap) => {
+      if (snap.val() === true) {
+        connIndicator.className = 'connection-indicator connected';
+        connText.textContent = lang === 'en' ? 'Connected' : 'Connecte';
+      } else {
+        connIndicator.className = 'connection-indicator disconnected';
+        connText.textContent = lang === 'en' ? 'Disconnected' : 'Deconnecte';
+      }
+    });
+
+    // Size map
+    const sizeMap = {
+      'text-4xl': 'size-text-4xl',
+      'text-6xl': 'size-text-6xl',
+      'text-8xl': 'size-text-8xl',
+      'text-9xl': 'size-text-9xl'
+    };
+
+    // Listen to state changes
+    const stateRef = ref(db, `rooms/${roomCode}/state`);
+    onValue(stateRef, (snapshot) => {
+      const state = snapshot.val();
+      if (!state) return;
+
+      // Format time
+      const min = Math.floor(state.timeLeft / 60);
+      const sec = state.timeLeft % 60;
+      timerText.textContent = String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+
+      // Visibility
+      if (state.isVisible) {
+        timerContainer.classList.remove('hidden-state');
+      } else {
+        timerContainer.classList.add('hidden-state');
+      }
+
+      // Color
+      if (state.color) {
+        timerText.classList.add('solid-color');
+        timerText.style.color = state.color;
+        timerText.style.filter = `drop-shadow(0 0 30px ${state.color}80)`;
+      } else {
+        timerText.classList.remove('solid-color');
+        timerText.style.color = '';
+        timerText.style.filter = 'drop-shadow(0 0 30px rgba(102, 126, 234, 0.5))';
+      }
+
+      // Size
+      timerText.className = 'timer-text ' + (sizeMap[state.size] || 'size-text-6xl');
+      if (state.color) timerText.classList.add('solid-color');
+
+      // Transparency
+      timerContainer.style.opacity = (state.transparency || 100) / 100;
+
+      // Blinking
+      if (state.isBlinking || (state.isRunning && state.timeLeft > 0 && state.timeLeft <= 30)) {
+        timerText.classList.add('blinking');
+      } else {
+        timerText.classList.remove('blinking');
+      }
+
+      // Message
+      if (state.message && state.message.trim()) {
+        messageText.textContent = state.message;
+        messageText.style.opacity = '1';
+        messageText.className = 'message-text ' +
+          (state.messagePosition === 'above' ? 'message-above' : 'message-below');
+      } else {
+        messageText.style.opacity = '0';
+      }
+    });
+  </script>
+</body>
+</html>

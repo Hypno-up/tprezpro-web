@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Timer Pro - BackOffice</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/styles.css">
+  <style>
+    body { height: 100vh; overflow: hidden; }
+
+    .main-container {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 0.75rem;
+      max-width: 100%;
+    }
+
+    .header-bar { flex-shrink: 0; margin-bottom: 0.75rem; }
+
+    .content-grid {
+      flex: 1;
+      overflow: hidden;
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    @media (min-width: 1024px) {
+      .content-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    .column {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      overflow-y: auto;
+      padding-right: 0.25rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="main-container">
+
+    <!-- Header -->
+    <div class="header-bar glass-card p-3 flex flex-wrap justify-between items-center gap-2">
+      <div class="flex items-center gap-2">
+        <svg class="logo-small" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="lg" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" style="stop-color:#667eea"/>
+              <stop offset="50%" style="stop-color:#764ba2"/>
+              <stop offset="100%" style="stop-color:#f093fb"/>
+            </linearGradient>
+          </defs>
+          <circle cx="50" cy="50" r="42" fill="none" stroke="url(#lg)" stroke-width="6"/>
+          <line x1="50" y1="50" x2="50" y2="22" stroke="url(#lg)" stroke-width="5" stroke-linecap="round"/>
+          <line x1="50" y1="50" x2="68" y2="50" stroke="url(#lg)" stroke-width="5" stroke-linecap="round"/>
+          <circle cx="50" cy="50" r="7" fill="url(#lg)"/>
+        </svg>
+        <h1 class="text-xl font-bold">Timer Pro</h1>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <!-- Room badge -->
+        <div id="room-badge" class="room-badge" title="Click to copy"></div>
+
+        <!-- License status -->
+        <div id="license-status" class="flex items-center gap-1.5 text-xs font-semibold cursor-pointer" title="Click to manage license">
+          <span class="status-dot status-yellow"></span>
+          <span data-i18n="demo-mode">Mode demo</span>
+        </div>
+
+        <!-- Language -->
+        <select id="language-selector" class="rounded-lg px-3 py-1.5 text-sm font-semibold">
+          <option value="fr">FR</option>
+          <option value="en">EN</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Main content -->
+    <div class="content-grid">
+
+      <!-- LEFT COLUMN -->
+      <div class="column">
+
+        <!-- Timer preview -->
+        <div class="glass-card p-4 text-center">
+          <div id="timer-display" class="timer-preview mb-2">05:00</div>
+          <div class="progress-track">
+            <div id="progress-bar" class="progress-bar" style="width:100%"></div>
+          </div>
+        </div>
+
+        <!-- Main controls -->
+        <div class="grid grid-cols-3 gap-2">
+          <button id="start-btn" class="btn btn-green font-bold py-4 text-xl">&#x25B6;&#xFE0F;</button>
+          <button id="pause-btn" class="btn btn-yellow font-bold py-4 text-xl">&#x23F8;&#xFE0F;</button>
+          <button id="reset-btn" class="btn btn-red font-bold py-4 text-xl">&#x1F504;</button>
+        </div>
+
+        <!-- Quick durations -->
+        <div class="glass-card p-3">
+          <label class="section-label" data-i18n="quick-durations">Durees rapides</label>
+          <div class="grid grid-cols-6 gap-2">
+            <button class="btn btn-purple py-2 quick-time" data-seconds="60">1m</button>
+            <button class="btn btn-purple py-2 quick-time" data-seconds="120">2m</button>
+            <button class="btn btn-purple py-2 quick-time" data-seconds="300">5m</button>
+            <button class="btn btn-purple py-2 quick-time" data-seconds="600">10m</button>
+            <button class="btn btn-purple py-2 quick-time" data-seconds="900">15m</button>
+            <button class="btn btn-purple py-2 quick-time" data-seconds="1800">30m</button>
+          </div>
+        </div>
+
+        <!-- Custom time -->
+        <div class="glass-card p-3">
+          <label class="section-label" data-i18n="custom-time">Personnalise</label>
+          <div class="flex gap-2">
+            <input id="custom-minutes" type="number" min="0" max="99" placeholder="Min" class="flex-1">
+            <input id="custom-seconds" type="number" min="0" max="59" placeholder="Sec" class="flex-1">
+            <button id="custom-ok" class="btn btn-purple px-4">OK</button>
+          </div>
+        </div>
+
+        <!-- Appearance -->
+        <div class="glass-card p-3">
+          <label class="section-label" data-i18n="appearance">Apparence</label>
+          <div class="flex gap-2 mb-3">
+            <button class="color-btn color-pick" data-color="#22c55e" style="background:#22c55e"></button>
+            <button class="color-btn color-pick" data-color="#eab308" style="background:#eab308"></button>
+            <button class="color-btn color-pick" data-color="#ef4444" style="background:#ef4444"></button>
+            <button class="color-btn color-pick" data-color="#3b82f6" style="background:#3b82f6"></button>
+            <button class="color-btn color-pick" data-color="#ffffff" style="background:#ffffff"></button>
+            <button class="color-btn color-pick" data-color="" style="background:linear-gradient(135deg,#667eea,#764ba2,#f093fb)" title="Gradient"></button>
+          </div>
+          <div class="grid grid-cols-4 gap-2">
+            <button class="btn btn-gray py-2 size-pick" data-size="text-4xl">S</button>
+            <button class="btn btn-gray py-2 size-pick" data-size="text-6xl">M</button>
+            <button class="btn btn-gray py-2 size-pick" data-size="text-8xl">L</button>
+            <button class="btn btn-gray py-2 size-pick" data-size="text-9xl">XL</button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT COLUMN -->
+      <div class="column">
+
+        <!-- Display settings -->
+        <div class="glass-card p-3">
+          <label class="section-label" data-i18n="display-settings">Affichage</label>
+          <div class="grid grid-cols-2 gap-2 mb-2">
+            <button id="visibility-btn" class="btn btn-indigo py-2">
+              <span id="vis-icon">&#x1F441;&#xFE0F;</span> <span id="vis-text" data-i18n="visible">Visible</span>
+            </button>
+            <button id="lock-btn" class="btn btn-green py-2">
+              <span id="lock-icon">&#x1F512;</span> <span id="lock-text" data-i18n="locked">Verrouille</span>
+            </button>
+          </div>
+          <label class="section-label text-sm mt-2">
+            <span data-i18n="transparency">Transparence</span>: <span id="transparency-value" class="text-purple-400">100</span>%
+          </label>
+          <input id="transparency-slider" type="range" min="10" max="100" value="100">
+        </div>
+
+        <!-- Message -->
+        <div class="glass-card p-3">
+          <label class="section-label" data-i18n="message-label">Message</label>
+          <div class="flex gap-2 mb-2">
+            <input id="message-input" type="text" placeholder="Message..." maxlength="100" class="flex-1">
+            <button id="clear-msg-btn" class="btn btn-gray px-3">&#x2716;</button>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <button id="msg-above" class="btn btn-purple py-2">&#x2B06;&#xFE0F; <span data-i18n="above">Dessus</span></button>
+            <button id="msg-below" class="btn btn-purple py-2">&#x2B07;&#xFE0F; <span data-i18n="below">Dessous</span></button>
+          </div>
+        </div>
+
+        <!-- Share -->
+        <div class="glass-card p-3">
+          <label class="section-label" data-i18n="share">Partager</label>
+          <div class="mb-2">
+            <label class="text-xs text-gray-400 mb-1 block" data-i18n="display-link">Lien Display</label>
+            <div class="flex gap-2">
+              <div id="display-url" class="flex-1 text-center font-mono text-xs font-bold bg-green-500 bg-opacity-20 text-green-400 rounded-lg p-2 border border-green-500 border-opacity-30 cursor-pointer hover:bg-opacity-30 transition-all truncate" title="Click to copy">
+              </div>
+              <button id="copy-link-btn" class="btn btn-green px-3 text-sm" data-i18n="copy-link">Copier</button>
+            </div>
+          </div>
+          <button id="show-qr-btn" class="btn btn-purple w-full py-2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+              <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+            </svg>
+            <span data-i18n="show-qr">Afficher QR Code</span>
+          </button>
+        </div>
+
+        <!-- Shortcuts -->
+        <div class="glass-card p-3">
+          <label class="section-label" data-i18n="shortcuts">Raccourcis</label>
+          <div class="space-y-1 text-sm text-gray-300">
+            <div class="flex justify-between"><span class="font-bold text-purple-400">Space</span><span>Start/Pause</span></div>
+            <div class="flex justify-between"><span class="font-bold text-purple-400">R</span><span>Reset</span></div>
+            <div class="flex justify-between"><span class="font-bold text-purple-400">H</span><span>Hide/Show</span></div>
+          </div>
+        </div>
+
+        <!-- License -->
+        <div class="glass-card p-3">
+          <label class="section-label" data-i18n="license-label">Licence</label>
+          <div id="license-section">
+            <div class="flex gap-2">
+              <input id="license-input" type="text" class="license-input flex-1" data-i18n="enter-license" placeholder="Entrer une cle de licence">
+              <button id="activate-btn" class="btn btn-purple px-4" data-i18n="activate">Activer</button>
+            </div>
+            <p id="license-msg" class="text-sm mt-2 hidden"></p>
+          </div>
+          <div id="license-active" class="hidden">
+            <div class="flex items-center gap-2">
+              <span class="status-dot status-green"></span>
+              <span class="text-green-400 font-semibold text-sm" data-i18n="license-valid">Licence valide</span>
+            </div>
+            <p id="license-email" class="text-xs text-gray-400 mt-1"></p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- QR Modal -->
+  <div id="qr-modal" class="modal-overlay hidden" onclick="document.getElementById('qr-modal').classList.add('hidden')">
+    <div class="modal-content" onclick="event.stopPropagation()">
+      <div class="text-center">
+        <h2 class="text-xl font-bold text-gray-800 mb-2">Scanner ce QR Code</h2>
+        <p class="text-xs text-gray-600 mb-3">Ouvrez l'appareil photo de votre smartphone</p>
+        <img id="qr-image" class="qr-image" src="" alt="QR Code">
+        <div class="bg-gray-100 rounded-lg p-2 mb-3">
+          <p class="text-xs text-gray-500 mb-1">Ou tapez cette adresse :</p>
+          <p id="qr-url" class="text-xs font-mono text-gray-800 font-bold"></p>
+        </div>
+        <button onclick="document.getElementById('qr-modal').classList.add('hidden')" class="btn btn-dark px-5 py-2">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+    import { getDatabase, ref, onValue, update, get } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+    import { firebaseConfig, initFirebase } from '/js/firebase-config.js';
+    import { getRoomCodeFromURL, getDisplayURL, DEFAULT_STATE } from '/js/room.js';
+    import { setLanguage, getLanguage, updatePageTranslations, t } from '/js/i18n.js';
+    import {
+      initTimerEngine, startTimer, pauseTimer, resetTimer, setTime,
+      setColor, setSize, setTransparency, setVisibility, setMessage,
+      setMessagePosition, toggleLock, updateLocalState, getLocalState,
+      handleVisibilityChange
+    } from '/js/timer-engine.js';
+    import { isLicensed, validateLicense, loadStoredLicense, getDemoMaxSeconds, getLicenseData } from '/js/license.js';
+
+    // Room code
+    const roomCode = getRoomCodeFromURL();
+    if (!roomCode) {
+      window.location.href = '/';
+      throw new Error('No room code');
+    }
+
+    // Init Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    initFirebase({ initializeApp: () => app }, { getDatabase: () => db });
+
+    // Init timer engine
+    const stateRef = ref(db, `rooms/${roomCode}/state`);
+
+    // Load initial state from Firebase
+    const snapshot = await get(stateRef);
+    const initialState = snapshot.exists() ? { ...DEFAULT_STATE, ...snapshot.val() } : { ...DEFAULT_STATE };
+
+    initTimerEngine({ ref, update }, roomCode, initialState);
+
+    // ============ ELEMENTS ============
+    const timerDisplay = document.getElementById('timer-display');
+    const progressBar = document.getElementById('progress-bar');
+    const roomBadge = document.getElementById('room-badge');
+    const displayUrl = document.getElementById('display-url');
+    const visBtn = document.getElementById('visibility-btn');
+    const visIcon = document.getElementById('vis-icon');
+    const visText = document.getElementById('vis-text');
+    const lockBtn = document.getElementById('lock-btn');
+    const lockIcon = document.getElementById('lock-icon');
+    const lockText = document.getElementById('lock-text');
+    const transpSlider = document.getElementById('transparency-slider');
+    const transpValue = document.getElementById('transparency-value');
+    const msgInput = document.getElementById('message-input');
+    const licenseStatus = document.getElementById('license-status');
+    const toast = document.getElementById('toast');
+
+    // ============ SETUP ============
+    roomBadge.textContent = roomCode;
+    const dispURL = getDisplayURL(roomCode);
+    displayUrl.textContent = dispURL;
+
+    // Language
+    const langSel = document.getElementById('language-selector');
+    langSel.value = getLanguage();
+    updatePageTranslations();
+    langSel.addEventListener('change', (e) => {
+      setLanguage(e.target.value);
+    });
+
+    // License
+    await loadStoredLicense();
+    updateLicenseUI();
+
+    // ============ FIREBASE LISTENER ============
+    onValue(stateRef, (snap) => {
+      const state = snap.val();
+      if (!state) return;
+      updateLocalState(state);
+      renderState(state);
+    });
+
+    function renderState(state) {
+      // Timer display
+      const min = Math.floor(state.timeLeft / 60);
+      const sec = state.timeLeft % 60;
+      timerDisplay.textContent = String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+
+      // Progress bar
+      const progress = state.totalTime > 0 ? (state.timeLeft / state.totalTime) * 100 : 0;
+      progressBar.style.width = progress + '%';
+      if (progress > 50) progressBar.style.background = 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)';
+      else if (progress > 25) progressBar.style.background = 'linear-gradient(90deg, #f093fb 0%, #f5576c 100%)';
+      else progressBar.style.background = 'linear-gradient(90deg, #f5576c 0%, #ef4444 100%)';
+
+      // Visibility button
+      if (state.isVisible) {
+        visIcon.innerHTML = '&#x1F441;&#xFE0F;';
+        visText.textContent = t('visible');
+        visBtn.className = 'btn btn-indigo py-2';
+      } else {
+        visIcon.innerHTML = '&#x1F648;';
+        visText.textContent = t('hidden');
+        visBtn.className = 'btn btn-gray py-2';
+      }
+
+      // Lock button
+      if (state.isLocked) {
+        lockIcon.innerHTML = '&#x1F512;';
+        lockText.textContent = t('locked');
+        lockBtn.className = 'btn btn-green py-2';
+      } else {
+        lockIcon.innerHTML = '&#x1F513;';
+        lockText.textContent = t('unlocked');
+        lockBtn.className = 'btn btn-purple py-2';
+      }
+
+      // Transparency
+      transpSlider.value = state.transparency || 100;
+      transpValue.textContent = state.transparency || 100;
+    }
+
+    // ============ CONTROLS ============
+
+    // Start / Pause / Reset
+    document.getElementById('start-btn').addEventListener('click', () => startTimer());
+    document.getElementById('pause-btn').addEventListener('click', () => pauseTimer());
+    document.getElementById('reset-btn').addEventListener('click', () => resetTimer());
+
+    // Quick times
+    document.querySelectorAll('.quick-time').forEach(btn => {
+      btn.addEventListener('click', () => {
+        let seconds = parseInt(btn.dataset.seconds);
+        if (!isLicensed() && seconds > getDemoMaxSeconds()) {
+          showToast(t('demo-limit'));
+          seconds = getDemoMaxSeconds();
+        }
+        setTime(seconds);
+      });
+    });
+
+    // Custom time
+    const customMin = document.getElementById('custom-minutes');
+    const customSec = document.getElementById('custom-seconds');
+    document.getElementById('custom-ok').addEventListener('click', applyCustomTime);
+    customMin.addEventListener('keypress', (e) => { if (e.key === 'Enter') applyCustomTime(); });
+    customSec.addEventListener('keypress', (e) => { if (e.key === 'Enter') applyCustomTime(); });
+
+    function applyCustomTime() {
+      const m = parseInt(customMin.value) || 0;
+      const s = parseInt(customSec.value) || 0;
+      if (m + s > 0) {
+        let totalSec = m * 60 + s;
+        if (!isLicensed() && totalSec > getDemoMaxSeconds()) {
+          showToast(t('demo-limit'));
+          totalSec = getDemoMaxSeconds();
+        }
+        setTime(totalSec);
+        customMin.value = '';
+        customSec.value = '';
+      }
+    }
+
+    // Colors
+    document.querySelectorAll('.color-pick').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.color-pick').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        setColor(btn.dataset.color || null);
+      });
+    });
+
+    // Sizes
+    document.querySelectorAll('.size-pick').forEach(btn => {
+      btn.addEventListener('click', () => setSize(btn.dataset.size));
+    });
+
+    // Visibility
+    visBtn.addEventListener('click', () => {
+      const state = getLocalState();
+      setVisibility(!state.isVisible);
+    });
+
+    // Lock
+    lockBtn.addEventListener('click', () => toggleLock());
+
+    // Transparency
+    transpSlider.addEventListener('input', (e) => {
+      transpValue.textContent = e.target.value;
+      setTransparency(parseInt(e.target.value));
+    });
+
+    // Message
+    msgInput.addEventListener('input', (e) => setMessage(e.target.value));
+    document.getElementById('clear-msg-btn').addEventListener('click', () => {
+      msgInput.value = '';
+      setMessage('');
+    });
+    document.getElementById('msg-above').addEventListener('click', () => setMessagePosition('above'));
+    document.getElementById('msg-below').addEventListener('click', () => setMessagePosition('below'));
+
+    // ============ SHARE ============
+
+    // Copy room code
+    roomBadge.addEventListener('click', () => {
+      navigator.clipboard.writeText(roomCode);
+      showToast(t('copied'));
+    });
+
+    // Copy display URL
+    displayUrl.addEventListener('click', () => {
+      navigator.clipboard.writeText(dispURL);
+      showToast(t('copied'));
+    });
+    document.getElementById('copy-link-btn').addEventListener('click', () => {
+      navigator.clipboard.writeText(dispURL);
+      showToast(t('copied'));
+    });
+
+    // QR Code
+    document.getElementById('show-qr-btn').addEventListener('click', () => {
+      const qrAPI = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(dispURL)}`;
+      document.getElementById('qr-image').src = qrAPI;
+      document.getElementById('qr-url').textContent = dispURL;
+      document.getElementById('qr-modal').classList.remove('hidden');
+    });
+
+    // ============ KEYBOARD SHORTCUTS ============
+    document.addEventListener('keydown', (e) => {
+      // Don't trigger when typing in inputs
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.key === 'Escape') {
+        document.getElementById('qr-modal').classList.add('hidden');
+        return;
+      }
+      if (e.key === ' ' || e.code === 'Space') {
+        e.preventDefault();
+        const state = getLocalState();
+        state.isRunning ? pauseTimer() : startTimer();
+      }
+      if (e.key === 'r' || e.key === 'R') {
+        resetTimer();
+      }
+      if (e.key === 'h' || e.key === 'H') {
+        const state = getLocalState();
+        setVisibility(!state.isVisible);
+      }
+    });
+
+    // ============ TAB VISIBILITY ============
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // ============ LICENSE ============
+    document.getElementById('activate-btn').addEventListener('click', async () => {
+      const key = document.getElementById('license-input').value.trim();
+      if (!key) return;
+
+      const btn = document.getElementById('activate-btn');
+      btn.disabled = true;
+      btn.textContent = '...';
+
+      const result = await validateLicense(key);
+      const msg = document.getElementById('license-msg');
+      msg.classList.remove('hidden');
+
+      if (result.valid) {
+        msg.className = 'text-sm mt-2 text-green-400';
+        msg.textContent = t('license-valid');
+        updateLicenseUI();
+      } else {
+        msg.className = 'text-sm mt-2 text-red-400';
+        msg.textContent = t('license-invalid') + (result.error ? ` (${result.error})` : '');
+      }
+
+      btn.disabled = false;
+      btn.textContent = t('activate');
+    });
+
+    function updateLicenseUI() {
+      const statusEl = licenseStatus;
+      const dot = statusEl.querySelector('.status-dot');
+      const text = statusEl.querySelector('span:last-child');
+
+      if (isLicensed()) {
+        dot.className = 'status-dot status-green';
+        text.textContent = t('licensed');
+        document.getElementById('license-section').classList.add('hidden');
+        document.getElementById('license-active').classList.remove('hidden');
+        const data = getLicenseData();
+        if (data?.email) {
+          document.getElementById('license-email').textContent = data.email;
+        }
+      } else {
+        dot.className = 'status-dot status-yellow';
+        text.textContent = t('demo-mode');
+      }
+    }
+
+    // ============ TOAST ============
+    function showToast(text) {
+      toast.textContent = text;
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 2000);
+    }
+  </script>
+</body>
+</html>

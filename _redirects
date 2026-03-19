@@ -1,0 +1,2 @@
+/room/:code /display.html?room=:code 200
+/admin/:code /backoffice.html?room=:code 200

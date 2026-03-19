@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Timer Presentation Pro</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="flex items-center justify-center">
+  <div class="w-full max-w-md p-6">
+
+    <!-- Logo & Title -->
+    <div class="text-center mb-8">
+      <div class="flex items-center justify-center gap-3 mb-3">
+        <svg class="w-12 h-12" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="lg" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" style="stop-color:#667eea"/>
+              <stop offset="50%" style="stop-color:#764ba2"/>
+              <stop offset="100%" style="stop-color:#f093fb"/>
+            </linearGradient>
+          </defs>
+          <circle cx="50" cy="50" r="42" fill="none" stroke="url(#lg)" stroke-width="6"/>
+          <line x1="50" y1="50" x2="50" y2="22" stroke="url(#lg)" stroke-width="5" stroke-linecap="round"/>
+          <line x1="50" y1="50" x2="68" y2="50" stroke="url(#lg)" stroke-width="5" stroke-linecap="round"/>
+          <circle cx="50" cy="50" r="7" fill="url(#lg)"/>
+        </svg>
+        <h1 class="text-3xl font-bold" data-i18n="app-title">Timer Presentation Pro</h1>
+      </div>
+      <p class="text-gray-400" data-i18n="app-subtitle">Timer professionnel pour vos presentations</p>
+    </div>
+
+    <!-- Create Room -->
+    <div class="glass-card p-6 mb-4">
+      <button id="create-room-btn" class="btn btn-purple btn-lg w-full" data-i18n="create-room">
+        Creer une salle
+      </button>
+    </div>
+
+    <!-- Join Room -->
+    <div class="glass-card p-6 mb-6">
+      <label class="section-label mb-3" data-i18n="join-room">Rejoindre une salle</label>
+      <div class="flex gap-2">
+        <input id="room-code-input" type="text" maxlength="6"
+               class="flex-1 uppercase tracking-widest text-center font-mono font-bold text-lg"
+               data-i18n="room-code-placeholder" placeholder="Code de salle (ex: XK7M2P)">
+        <button id="join-room-btn" class="btn btn-blue px-6" data-i18n="join-btn">Rejoindre</button>
+      </div>
+      <p id="join-error" class="text-red-400 text-sm mt-2 hidden"></p>
+    </div>
+
+    <!-- Overlay Download -->
+    <div class="glass-card p-6 mb-4">
+      <div class="text-center mb-3">
+        <span class="text-lg font-bold">Timer Overlay</span>
+        <p class="text-gray-400 text-xs mt-1">Fenetre transparente par-dessus PowerPoint</p>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <a id="dl-mac" href="https://github.com/YOUR_USER/tprezpro-web/releases/latest/download/Timer.Display-1.0.0-arm64.dmg"
+           class="btn btn-gray py-3 text-center text-sm no-underline">
+          Mac (Apple Silicon)
+        </a>
+        <a id="dl-win" href="https://github.com/YOUR_USER/tprezpro-web/releases/latest/download/Timer.Display-1.0.0.exe"
+           class="btn btn-gray py-3 text-center text-sm no-underline">
+          Windows
+        </a>
+      </div>
+      <p class="text-gray-500 text-xs text-center mt-2">Ou utilisez le Display web : creez une salle puis partagez le lien</p>
+    </div>
+
+    <!-- Language -->
+    <div class="text-center">
+      <select id="language-selector" class="rounded-lg px-3 py-1.5 text-sm font-semibold">
+        <option value="fr">FR</option>
+        <option value="en">EN</option>
+      </select>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+    import { getDatabase, ref, get, set } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+    import { firebaseConfig } from '/js/firebase-config.js';
+    import { createRoom, roomExists } from '/js/room.js';
+    import { initFirebase } from '/js/firebase-config.js';
+    import { setLanguage, getLanguage, updatePageTranslations, t } from '/js/i18n.js';
+
+    // Init Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    // Store db reference for other modules
+    initFirebase({ initializeApp: () => app }, { getDatabase: () => db });
+
+    // Language
+    const langSel = document.getElementById('language-selector');
+    langSel.value = getLanguage();
+    updatePageTranslations();
+    langSel.addEventListener('change', (e) => {
+      setLanguage(e.target.value);
+    });
+
+    // Create room
+    document.getElementById('create-room-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('create-room-btn');
+      btn.disabled = true;
+      btn.textContent = '...';
+      try {
+        const code = await createRoom({ ref, set, get });
+        window.location.href = `/admin/${code}`;
+      } catch (err) {
+        console.error('Error creating room:', err);
+        btn.textContent = t('create-room');
+        btn.disabled = false;
+      }
+    });
+
+    // Join room
+    const joinBtn = document.getElementById('join-room-btn');
+    const codeInput = document.getElementById('room-code-input');
+    const joinError = document.getElementById('join-error');
+
+    async function joinRoom() {
+      const code = codeInput.value.trim().toUpperCase();
+      joinError.classList.add('hidden');
+
+      if (!code || code.length < 4) {
+        joinError.textContent = t('invalid-code');
+        joinError.classList.remove('hidden');
+        return;
+      }
+
+      joinBtn.disabled = true;
+      joinBtn.textContent = '...';
+
+      try {
+        const exists = await roomExists({ ref, get }, code);
+        if (exists) {
+          window.location.href = `/room/${code}`;
+        } else {
+          joinError.textContent = t('room-not-found');
+          joinError.classList.remove('hidden');
+        }
+      } catch (err) {
+        joinError.textContent = 'Error';
+        joinError.classList.remove('hidden');
+      }
+
+      joinBtn.textContent = t('join-btn');
+      joinBtn.disabled = false;
+    }
+
+    joinBtn.addEventListener('click', joinRoom);
+    codeInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') joinRoom();
+    });
+    // Auto uppercase
+    codeInput.addEventListener('input', () => {
+      codeInput.value = codeInput.value.toUpperCase();
+    });
+  </script>
+</body>
+</html>
