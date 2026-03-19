@@ -10,17 +10,14 @@ const args = process.argv.slice(2);
 let roomCode = args[0] || '';
 
 // === Machine ID ===
-// Generates a unique ID based on hardware. Changes on reinstall (new app data path).
 function getMachineId() {
   const appDataPath = app.getPath('userData');
   const idFile = path.join(appDataPath, '.machine-id');
 
-  // Check for existing ID
   if (fs.existsSync(idFile)) {
     return fs.readFileSync(idFile, 'utf8').trim();
   }
 
-  // Generate new: hash of hostname + username + app path (changes on reinstall)
   const raw = `${os.hostname()}-${os.userInfo().username}-${appDataPath}-${Date.now()}`;
   const id = crypto.createHash('sha256').update(raw).digest('hex').substring(0, 16);
   fs.writeFileSync(idFile, id, 'utf8');
@@ -92,8 +89,15 @@ function createDisplayWindow() {
     }
   });
 
-  const displayURL = `file://${path.join(__dirname, 'display.html')}?room=${roomCode}`;
-  displayWindow.loadURL(displayURL);
+  // Use loadFile instead of loadURL for reliable local file loading
+  displayWindow.loadFile(path.join(__dirname, 'display.html'), {
+    query: { room: roomCode }
+  });
+
+  // Debug: log any load errors
+  displayWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    console.error('Display load failed:', errorCode, errorDescription);
+  });
 
   if (process.platform === 'darwin') {
     displayWindow.setWindowButtonVisibility(false);
@@ -133,7 +137,18 @@ function createRoomInputWindow() {
     }
   });
 
-  inputWin.loadURL(`file://${path.join(__dirname, 'room-input.html')}`);
+  // Use loadFile instead of loadURL
+  inputWin.loadFile(path.join(__dirname, 'room-input.html'));
+
+  // Debug: open devtools in dev mode, log errors in production
+  inputWin.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    console.error('Room input load failed:', errorCode, errorDescription);
+  });
+
+  // Show devtools if env is set (for debugging)
+  if (process.env.DEBUG_ELECTRON) {
+    inputWin.webContents.openDevTools({ mode: 'detach' });
+  }
 
   ipcMain.on('set-room-code', (event, code) => {
     roomCode = code;
@@ -156,7 +171,6 @@ ipcMain.handle('get-license-status', () => {
   const stored = getStoredLicense();
   if (!stored) return { valid: false };
 
-  // Check local expiry
   if (stored.expiresAt && new Date(stored.expiresAt) < new Date()) {
     return { valid: false, error: 'Cle expiree' };
   }
