@@ -262,12 +262,13 @@
       'text-9xl': 'size-text-9xl'
     };
 
-    // Compute real timeLeft from server state
+    // Compute timeLeft from timestamps (used once on sync)
     function computeTimeLeft(state) {
       if (!state || !state.isRunning) return state ? state.timeLeft : 0;
       const now = Date.now();
-      const elapsed = Math.floor((now - (state.lastTick || now)) / 1000);
-      return Math.max(0, (state.startedTimeLeft || state.timeLeft) - elapsed);
+      const base = state.startedTimeLeft != null ? state.startedTimeLeft : state.timeLeft;
+      const elapsed = Math.max(0, Math.round((now - (state.lastTick || now)) / 1000));
+      return Math.max(0, base - elapsed);
     }
 
     function formatTime(seconds) {
@@ -276,17 +277,23 @@
       return String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
     }
 
-    // Local tick: update display every second without waiting for Firebase
+    // Local state + countdown
     let currentState = null;
-    setInterval(() => {
-      if (!currentState || !currentState.isRunning) return;
-      const realTime = computeTimeLeft(currentState);
-      timerText.textContent = formatTime(realTime);
-      // Auto-stop at 0
-      if (realTime === 0) {
-        currentState.isRunning = false;
-      }
-    }, 1000);
+    let displayTimeLeft = 0;
+    let localInterval = null;
+
+    function startLocalTick() {
+      if (localInterval) return;
+      localInterval = setInterval(() => {
+        if (!currentState || !currentState.isRunning || displayTimeLeft <= 0) {
+          clearInterval(localInterval);
+          localInterval = null;
+          return;
+        }
+        displayTimeLeft = Math.max(0, displayTimeLeft - 1);
+        timerText.textContent = formatTime(displayTimeLeft);
+      }, 1000);
+    }
 
     // Listen to state changes from Firebase
     const stateRef = ref(db, `rooms/${roomCode}/state`);
@@ -295,8 +302,16 @@
       if (!state) return;
       currentState = state;
 
-      // Format time (compute real elapsed)
-      const realTime = computeTimeLeft(state);
+      // Compute real time once on sync
+      const realTime = state.isRunning ? computeTimeLeft(state) : state.timeLeft;
+      displayTimeLeft = realTime;
+
+      if (state.isRunning && !localInterval) {
+        startLocalTick();
+      } else if (!state.isRunning && localInterval) {
+        clearInterval(localInterval);
+        localInterval = null;
+      }
       timerText.textContent = formatTime(realTime);
 
       // Visibility

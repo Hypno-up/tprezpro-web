@@ -1,14 +1,13 @@
-// Timer Engine - countdown logic
-// Only ONE client drives the countdown (the one that starts it).
-// All others compute timeLeft from lastTick + startedTimeLeft.
+// Timer Engine - clean countdown with Firebase sync
+// Firebase stores: startedTimeLeft, lastTick, isRunning
+// Each client computes locally, Firebase syncs commands only
 import { getDb } from './firebase-config.js';
 
 let localState = null;
 let roomCode = null;
 let firebaseRef = null;
 let firebaseUpdate = null;
-let tickRafId = null;
-let isMaster = false; // true = this client drives the countdown
+let localCountdown = null; // local interval for smooth ticking
 
 export function initTimerEngine(firebase, code, initialState) {
   roomCode = code;
@@ -24,69 +23,53 @@ function writeState(partial) {
   firebaseUpdate(stateRef, partial);
 }
 
-// === Compute real timeLeft from Firebase state ===
-// startedTimeLeft = time remaining when timer was started/last written
-// lastTick = timestamp when startedTimeLeft was recorded
-// If running, timeLeft = startedTimeLeft - elapsed seconds since lastTick
+// === Compute real timeLeft from timestamps (used once on sync) ===
 export function computeTimeLeft(state) {
   if (!state) return 0;
-  if (!state.isRunning) return state.timeLeft;
+  if (!state.isRunning) return state.timeLeft || 0;
 
   const now = Date.now();
-  const elapsed = Math.floor((now - (state.lastTick || now)) / 1000);
-  return Math.max(0, (state.startedTimeLeft || state.timeLeft) - elapsed);
+  const base = state.startedTimeLeft != null ? state.startedTimeLeft : state.timeLeft;
+  const tick = state.lastTick || now;
+  const elapsed = Math.max(0, Math.round((now - tick) / 1000));
+  return Math.max(0, base - elapsed);
 }
 
-// === Master tick loop ===
-// Only the client that pressed Start writes countdown updates.
-function masterTick() {
-  if (!isMaster || !localState.isRunning) return;
+// === Local countdown (runs on every client for smooth display) ===
+function startLocalCountdown() {
+  stopLocalCountdown();
+  localCountdown = setInterval(() => {
+    if (!localState.isRunning || localState.timeLeft <= 0) {
+      stopLocalCountdown();
+      return;
+    }
+    localState.timeLeft = Math.max(0, localState.timeLeft - 1);
 
-  const realTimeLeft = computeTimeLeft(localState);
-
-  if (realTimeLeft !== localState.timeLeft) {
-    localState.timeLeft = realTimeLeft;
-
-    if (localState.autoBlinkSeconds > 0 && realTimeLeft <= localState.autoBlinkSeconds) {
+    if (localState.autoBlinkSeconds > 0 && localState.timeLeft <= localState.autoBlinkSeconds) {
       localState.isBlinking = true;
     }
 
-    if (realTimeLeft === 0) {
+    if (localState.timeLeft === 0) {
       localState.isRunning = false;
       localState.isBlinking = false;
-      isMaster = false;
-      writeState({
-        timeLeft: 0,
-        isRunning: false,
-        isBlinking: false
-      });
-      return;
+      stopLocalCountdown();
+      // Write final state
+      writeState({ timeLeft: 0, isRunning: false, isBlinking: false });
     }
-
-    // Write every 5 seconds to keep Firebase in sync without flooding
-    if (realTimeLeft % 5 === 0) {
-      writeState({
-        timeLeft: realTimeLeft,
-        isBlinking: localState.isBlinking
-      });
-    }
-  }
-
-  tickRafId = setTimeout(masterTick, 1000);
+  }, 1000);
 }
 
-function stopMasterTick() {
-  if (tickRafId) {
-    clearTimeout(tickRafId);
-    tickRafId = null;
+function stopLocalCountdown() {
+  if (localCountdown) {
+    clearInterval(localCountdown);
+    localCountdown = null;
   }
 }
 
-// === Actions (any client can trigger these) ===
+// === Actions ===
 
 export function startTimer() {
   if (localState.timeLeft <= 0) return;
-  isMaster = true;
   localState.isRunning = true;
   localState.lastTick = Date.now();
   localState.startedTimeLeft = localState.timeLeft;
@@ -96,26 +79,21 @@ export function startTimer() {
     startedTimeLeft: localState.timeLeft,
     timeLeft: localState.timeLeft
   });
-  stopMasterTick();
-  tickRafId = setTimeout(masterTick, 1000);
+  startLocalCountdown();
 }
 
 export function pauseTimer() {
-  isMaster = false;
-  stopMasterTick();
-  const realTimeLeft = computeTimeLeft(localState);
+  stopLocalCountdown();
   localState.isRunning = false;
-  localState.timeLeft = realTimeLeft;
   writeState({
     isRunning: false,
-    timeLeft: realTimeLeft,
-    startedTimeLeft: realTimeLeft
+    timeLeft: localState.timeLeft,
+    startedTimeLeft: localState.timeLeft
   });
 }
 
 export function resetTimer() {
-  isMaster = false;
-  stopMasterTick();
+  stopLocalCountdown();
   localState.isRunning = false;
   localState.timeLeft = localState.totalTime;
   localState.isBlinking = false;
@@ -128,8 +106,7 @@ export function resetTimer() {
 }
 
 export function setTime(seconds) {
-  isMaster = false;
-  stopMasterTick();
+  stopLocalCountdown();
   localState.totalTime = seconds;
   localState.timeLeft = seconds;
   localState.isRunning = false;
@@ -178,34 +155,36 @@ export function toggleLock() {
   writeState({ isLocked: localState.isLocked });
 }
 
+// Called when Firebase sends a new state
 export function updateLocalState(newState) {
   const wasRunning = localState?.isRunning;
   localState = { ...localState, ...newState };
 
-  // If another client started the timer, compute correct timeLeft locally
-  if (localState.isRunning && !isMaster) {
+  // Compute correct timeLeft from timestamps
+  if (localState.isRunning) {
     localState.timeLeft = computeTimeLeft(localState);
+    if (!localCountdown) {
+      startLocalCountdown();
+    }
+  } else {
+    stopLocalCountdown();
   }
 }
 
 export function getLocalState() {
-  // Always compute real-time timeLeft
-  if (localState.isRunning) {
-    return { ...localState, timeLeft: computeTimeLeft(localState) };
-  }
   return { ...localState };
 }
 
-// Handle tab coming back to foreground
 export function handleVisibilityChange() {
   if (document.hidden) return;
   if (!localState.isRunning) return;
-
-  // Recalculate from Firebase state
+  // Recalculate on tab focus
   localState.timeLeft = computeTimeLeft(localState);
-
   if (localState.timeLeft === 0) {
     localState.isRunning = false;
     localState.isBlinking = false;
+    stopLocalCountdown();
+  } else if (!localCountdown) {
+    startLocalCountdown();
   }
 }
