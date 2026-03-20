@@ -1,2 +1,4 @@
 /room/:code /display.html?room=:code 200
 /admin/:code /backoffice.html?room=:code 200
+/control/:code /mobile.html?room=:code 200
+/licenses /license-admin.html 200

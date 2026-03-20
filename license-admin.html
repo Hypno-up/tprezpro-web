@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Timer Pro - Gestion Licences</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/styles.css">
+  <style>
+    body { min-height: 100vh; padding: 1rem; }
+    .admin-container { max-width: 900px; margin: 0 auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; padding: 0.5rem; color: rgba(255,255,255,0.5); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid rgba(255,255,255,0.1); }
+    td { padding: 0.5rem; font-size: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 20px; font-size: 0.65rem; font-weight: 700; }
+    .badge-active { background: rgba(34,197,94,0.2); color: #4ade80; }
+    .badge-expired { background: rgba(248,113,113,0.2); color: #f87171; }
+    .badge-unused { background: rgba(139,92,246,0.2); color: #a78bfa; }
+    .badge-master { background: rgba(234,179,8,0.2); color: #fbbf24; }
+    .code-text { font-family: monospace; font-weight: 700; letter-spacing: 0.05em; cursor: pointer; }
+    .code-text:hover { color: #8b5cf6; }
+    .tab-btn { padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer; border: none; color: rgba(255,255,255,0.5); background: transparent; transition: all 0.2s; }
+    .tab-btn.active { background: rgba(139,92,246,0.2); color: #a78bfa; }
+    .tab-btn:hover { color: white; }
+    .stat-card { text-align: center; padding: 1rem; }
+    .stat-number { font-size: 2rem; font-weight: 900; }
+    .stat-label { font-size: 0.7rem; color: rgba(255,255,255,0.5); text-transform: uppercase; }
+    .copy-toast { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); background: #8b5cf6; color: white; padding: 0.5rem 1.5rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600; opacity: 0; transition: opacity 0.3s; z-index: 100; }
+    .copy-toast.show { opacity: 1; }
+    .auth-screen { display: flex; align-items: center; justify-content: center; min-height: 80vh; }
+    .auth-box { width: 320px; text-align: center; }
+  </style>
+</head>
+<body>
+  <!-- Auth Screen -->
+  <div id="auth-screen" class="auth-screen">
+    <div class="auth-box glass-card p-6">
+      <h1 class="text-xl font-bold mb-1">Gestion Licences</h1>
+      <p class="text-gray-400 text-xs mb-4">Acces reserve a l'administrateur</p>
+      <input id="admin-pass" type="password" class="w-full mb-3 text-center" placeholder="Code admin">
+      <button id="admin-login" class="btn btn-purple w-full py-2">Acceder</button>
+      <p id="auth-error" class="text-red-400 text-xs mt-2 hidden">Code incorrect</p>
+    </div>
+  </div>
+
+  <!-- Main Admin -->
+  <div id="admin-panel" class="admin-container" style="display:none;">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-4">
+      <h1 class="text-xl font-bold">Gestion Licences</h1>
+      <a href="/" class="text-gray-400 text-sm hover:text-white">Retour</a>
+    </div>
+
+    <!-- Stats -->
+    <div class="grid grid-cols-4 gap-3 mb-4">
+      <div class="glass-card stat-card">
+        <div id="stat-total" class="stat-number text-purple-400">0</div>
+        <div class="stat-label">Total</div>
+      </div>
+      <div class="glass-card stat-card">
+        <div id="stat-unused" class="stat-number text-blue-400">0</div>
+        <div class="stat-label">Disponibles</div>
+      </div>
+      <div class="glass-card stat-card">
+        <div id="stat-active" class="stat-number text-green-400">0</div>
+        <div class="stat-label">Actives</div>
+      </div>
+      <div class="glass-card stat-card">
+        <div id="stat-expired" class="stat-number text-red-400">0</div>
+        <div class="stat-label">Expirees</div>
+      </div>
+    </div>
+
+    <!-- Generate Section -->
+    <div class="glass-card p-4 mb-4">
+      <h2 class="text-sm font-bold mb-3">Generer des codes pour un client</h2>
+      <div class="grid grid-cols-2 gap-3 mb-3">
+        <div>
+          <label class="text-xs text-gray-400 block mb-1">Nom du client</label>
+          <input id="gen-client" type="text" placeholder="Ex: Jean Dupont" class="w-full">
+        </div>
+        <div>
+          <label class="text-xs text-gray-400 block mb-1">Email (optionnel)</label>
+          <input id="gen-email" type="email" placeholder="client@email.com" class="w-full">
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-3 mb-3">
+        <div>
+          <label class="text-xs text-gray-400 block mb-1">Duree</label>
+          <select id="gen-duration" class="w-full">
+            <option value="24">1 jour</option>
+            <option value="48">2 jours</option>
+            <option value="72" selected>3 jours</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs text-gray-400 block mb-1">Nombre de codes</label>
+          <input id="gen-count" type="number" value="1" min="1" max="50" class="w-full">
+        </div>
+        <div>
+          <label class="text-xs text-gray-400 block mb-1">&nbsp;</label>
+          <button id="gen-btn" class="btn btn-purple w-full py-2">Generer</button>
+        </div>
+      </div>
+      <div id="gen-result" class="hidden">
+        <div class="bg-green-500 bg-opacity-10 border border-green-500 border-opacity-20 rounded-lg p-3">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-green-400 text-xs font-bold">Codes generes :</span>
+            <button id="copy-all-btn" class="btn btn-green px-3 py-1 text-xs">Copier tout</button>
+          </div>
+          <div id="gen-codes" class="font-mono text-sm text-green-300 space-y-1"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex gap-2 mb-3">
+      <button class="tab-btn active" data-tab="all">Toutes</button>
+      <button class="tab-btn" data-tab="unused">Disponibles</button>
+      <button class="tab-btn" data-tab="active">Actives</button>
+      <button class="tab-btn" data-tab="expired">Expirees</button>
+    </div>
+
+    <!-- License Table -->
+    <div class="glass-card p-3">
+      <table>
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Client</th>
+            <th>Duree</th>
+            <th>Statut</th>
+            <th>Expire dans</th>
+            <th>Machine</th>
+          </tr>
+        </thead>
+        <tbody id="license-table"></tbody>
+      </table>
+      <p id="no-licenses" class="text-center text-gray-500 text-sm py-4 hidden">Aucune licence</p>
+    </div>
+  </div>
+
+  <div id="copy-toast" class="copy-toast">Copie !</div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+    import { getDatabase, ref, onValue, set, push, update } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+    import { firebaseConfig } from '/js/firebase-config.js';
+
+    const ADMIN_CODE = 'TPRO-MASTER-01';
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // Auth
+    const authScreen = document.getElementById('auth-screen');
+    const adminPanel = document.getElementById('admin-panel');
+    const adminPass = document.getElementById('admin-pass');
+    const authError = document.getElementById('auth-error');
+
+    // Check stored auth
+    if (sessionStorage.getItem('license-admin-auth') === 'ok') {
+      authScreen.style.display = 'none';
+      adminPanel.style.display = 'block';
+      loadLicenses();
+    }
+
+    document.getElementById('admin-login').addEventListener('click', doLogin);
+    adminPass.addEventListener('keypress', (e) => { if (e.key === 'Enter') doLogin(); });
+
+    function doLogin() {
+      if (adminPass.value.trim() === ADMIN_CODE) {
+        sessionStorage.setItem('license-admin-auth', 'ok');
+        authScreen.style.display = 'none';
+        adminPanel.style.display = 'block';
+        loadLicenses();
+      } else {
+        authError.classList.remove('hidden');
+      }
+    }
+
+    // License data
+    let allLicenses = [];
+    let currentTab = 'all';
+
+    function loadLicenses() {
+      onValue(ref(db, 'licenses'), (snapshot) => {
+        const data = snapshot.val() || {};
+        allLicenses = Object.entries(data).map(([code, info]) => ({
+          code,
+          ...info,
+          status: getStatus(info)
+        })).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+        updateStats();
+        renderTable();
+      });
+    }
+
+    function getStatus(license) {
+      if (license.unlimited || license.plan === 'master') return 'master';
+      if (!license.activatedAt) return 'unused';
+      const activated = new Date(license.activatedAt);
+      const elapsed = (Date.now() - activated.getTime()) / (1000 * 60 * 60);
+      if (elapsed > (license.durationHours || 24)) return 'expired';
+      return 'active';
+    }
+
+    function getTimeLeft(license) {
+      if (license.unlimited || license.plan === 'master') return 'Illimite';
+      if (!license.activatedAt) return '-';
+      const activated = new Date(license.activatedAt);
+      const durationMs = (license.durationHours || 24) * 60 * 60 * 1000;
+      const expiresAt = activated.getTime() + durationMs;
+      const remaining = expiresAt - Date.now();
+      if (remaining <= 0) return 'Expire';
+      const hours = Math.floor(remaining / (1000 * 60 * 60));
+      const mins = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+      return `${hours}h${String(mins).padStart(2,'0')}`;
+    }
+
+    function updateStats() {
+      const total = allLicenses.length;
+      const unused = allLicenses.filter(l => l.status === 'unused').length;
+      const active = allLicenses.filter(l => l.status === 'active' || l.status === 'master').length;
+      const expired = allLicenses.filter(l => l.status === 'expired').length;
+      document.getElementById('stat-total').textContent = total;
+      document.getElementById('stat-unused').textContent = unused;
+      document.getElementById('stat-active').textContent = active;
+      document.getElementById('stat-expired').textContent = expired;
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('license-table');
+      const noLicenses = document.getElementById('no-licenses');
+
+      let filtered = allLicenses;
+      if (currentTab === 'unused') filtered = allLicenses.filter(l => l.status === 'unused');
+      else if (currentTab === 'active') filtered = allLicenses.filter(l => l.status === 'active' || l.status === 'master');
+      else if (currentTab === 'expired') filtered = allLicenses.filter(l => l.status === 'expired');
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = '';
+        noLicenses.classList.remove('hidden');
+        return;
+      }
+      noLicenses.classList.add('hidden');
+
+      tbody.innerHTML = filtered.map(l => {
+        const statusBadge = {
+          master: '<span class="badge badge-master">Master</span>',
+          active: '<span class="badge badge-active">Active</span>',
+          unused: '<span class="badge badge-unused">Disponible</span>',
+          expired: '<span class="badge badge-expired">Expiree</span>'
+        }[l.status];
+
+        const duration = l.unlimited ? 'Illimite' : `${l.durationHours || 24}h`;
+        const client = l.client || '-';
+        const machine = l.machineId ? l.machineId.substring(0, 8) + '...' : '-';
+
+        return `<tr>
+          <td><span class="code-text" onclick="copyCode('${l.code}')">${l.code}</span></td>
+          <td class="text-gray-300">${client}</td>
+          <td class="text-gray-400">${duration}</td>
+          <td>${statusBadge}</td>
+          <td class="text-gray-400">${getTimeLeft(l)}</td>
+          <td class="text-gray-500 text-xs">${machine}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    // Tabs
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentTab = btn.dataset.tab;
+        renderTable();
+      });
+    });
+
+    // Generate codes
+    document.getElementById('gen-btn').addEventListener('click', async () => {
+      const client = document.getElementById('gen-client').value.trim();
+      const email = document.getElementById('gen-email').value.trim();
+      const durationHours = parseInt(document.getElementById('gen-duration').value);
+      const count = Math.min(50, Math.max(1, parseInt(document.getElementById('gen-count').value) || 1));
+
+      if (!client) {
+        alert('Nom du client requis');
+        return;
+      }
+
+      const btn = document.getElementById('gen-btn');
+      btn.disabled = true;
+      btn.textContent = 'Generation...';
+
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      const codes = [];
+
+      for (let i = 0; i < count; i++) {
+        let code = 'TPRO-';
+        for (let j = 0; j < 4; j++) code += chars[Math.floor(Math.random() * chars.length)];
+        code += '-';
+        for (let j = 0; j < 4; j++) code += chars[Math.floor(Math.random() * chars.length)];
+
+        const durationLabel = durationHours === 24 ? '1 jour' : durationHours === 48 ? '2 jours' : '3 jours';
+        const plan = durationHours === 24 ? 'day' : durationHours === 48 ? '2day' : 'multi';
+
+        await set(ref(db, `licenses/${code}`), {
+          plan,
+          durationHours,
+          createdAt: new Date().toISOString(),
+          activatedAt: null,
+          machineId: null,
+          expired: false,
+          client: client,
+          email: email || null
+        });
+
+        codes.push(code);
+      }
+
+      // Show result
+      const genResult = document.getElementById('gen-result');
+      const genCodes = document.getElementById('gen-codes');
+      genCodes.innerHTML = codes.map(c => `<div>${c}</div>`).join('');
+      genResult.classList.remove('hidden');
+
+      btn.disabled = false;
+      btn.textContent = 'Generer';
+    });
+
+    // Copy all generated codes
+    document.getElementById('copy-all-btn').addEventListener('click', () => {
+      const codes = document.getElementById('gen-codes').innerText;
+      const client = document.getElementById('gen-client').value.trim();
+      const duration = document.getElementById('gen-duration').selectedOptions[0].text;
+      const text = `Client: ${client}\nDuree: ${duration}\n\n${codes}`;
+      navigator.clipboard.writeText(text);
+      showToast('Copie avec infos client !');
+    });
+
+    // Copy single code
+    window.copyCode = function(code) {
+      navigator.clipboard.writeText(code);
+      showToast('Code copie: ' + code);
+    };
+
+    function showToast(text) {
+      const toast = document.getElementById('copy-toast');
+      toast.textContent = text;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2000);
+    }
+  </script>
+</body>
+</html>
