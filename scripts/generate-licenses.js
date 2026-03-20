@@ -20,17 +20,29 @@ const args = process.argv.slice(2);
 const typeIdx = args.indexOf('--type');
 const countIdx = args.indexOf('--count');
 
+const daysIdx = args.indexOf('--days');
 const type = typeIdx >= 0 ? args[typeIdx + 1] : 'day';
 const count = countIdx >= 0 ? parseInt(args[countIdx + 1]) : 5;
+const customDays = daysIdx >= 0 ? parseInt(args[daysIdx + 1]) : null;
 
 const PLANS = {
-  day:   { durationHours: 24,  plan: 'day',   label: '1 jour' },
-  multi: { durationHours: 72,  plan: 'multi', label: '3 jours' }
+  day:    { durationHours: 24,  plan: 'day',    label: '1 jour' },
+  '2day': { durationHours: 48,  plan: '2day',   label: '2 jours' },
+  multi:  { durationHours: 72,  plan: 'multi',  label: '3 jours' },
+  master: { durationHours: 999999, plan: 'master', label: 'Illimite', unlimited: true }
 };
 
-const plan = PLANS[type];
+// Allow --days N for custom duration
+let plan;
+if (customDays) {
+  plan = { durationHours: customDays * 24, plan: `${customDays}day`, label: `${customDays} jour${customDays > 1 ? 's' : ''}` };
+} else {
+  plan = PLANS[type];
+}
+
 if (!plan) {
-  console.error(`Type inconnu: ${type}. Utilisez: day, multi`);
+  console.error(`Type inconnu: ${type}. Utilisez: day, 2day, multi, master`);
+  console.error(`Ou: --days N pour une duree personnalisee (ex: --days 2)`);
   process.exit(1);
 }
 
@@ -77,7 +89,8 @@ async function main() {
       createdAt: new Date().toISOString(),
       activatedAt: null,
       machineId: null,
-      expired: false
+      expired: false,
+      ...(plan.unlimited ? { unlimited: true } : {})
     };
 
     await firebasePut(`/licenses/${code}`, licenseData);

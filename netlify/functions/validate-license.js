@@ -56,6 +56,23 @@ exports.handler = async (event) => {
       return { statusCode: 200, headers, body: JSON.stringify({ valid: false, error: 'Cle invalide' }) };
     }
 
+    // Master key: unlimited, no machine binding, never expires
+    if (license.unlimited || license.plan === 'master') {
+      return {
+        statusCode: 200, headers,
+        body: JSON.stringify({
+          valid: true,
+          data: {
+            plan: 'master',
+            expiresAt: null,
+            durationHours: 999999,
+            hoursLeft: 'illimite',
+            unlimited: true
+          }
+        })
+      };
+    }
+
     // Check if already used (different machine)
     if (license.machineId && machineId && license.machineId !== machineId) {
       return { statusCode: 200, headers, body: JSON.stringify({ valid: false, error: 'Cle deja utilisee sur un autre appareil' }) };
