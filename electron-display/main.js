@@ -5,6 +5,12 @@ const https = require('https');
 const os = require('os');
 const fs = require('fs');
 
+// Windows transparency fix
+if (process.platform === 'win32') {
+  app.commandLine.appendSwitch('enable-transparent-visuals');
+  app.commandLine.appendSwitch('disable-gpu');
+}
+
 let displayWindow = null;
 const args = process.argv.slice(2);
 let roomCode = args[0] || '';
@@ -82,6 +88,7 @@ function createDisplayWindow() {
     maximizable: false,
     fullscreenable: false,
     enableLargerThanScreen: true,
+    ...(process.platform === 'win32' ? { backgroundColor: '#00000000' } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
