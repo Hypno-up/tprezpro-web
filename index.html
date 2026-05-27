@@ -31,14 +31,45 @@
       <p class="text-gray-400" data-i18n="app-subtitle">Timer professionnel pour vos presentations</p>
     </div>
 
-    <!-- Create Room -->
-    <div class="glass-card p-6 mb-4">
-      <button id="create-room-btn" class="btn btn-purple btn-lg w-full" data-i18n="create-room">
-        Creer une salle
-      </button>
+    <!-- License Gate (shown when NOT licensed) -->
+    <div id="license-gate" class="glass-card p-6 mb-4 hidden">
+      <label class="section-label mb-3">Code d'activation</label>
+      <div class="flex gap-2">
+        <input id="license-key-input" type="text" maxlength="14"
+               class="flex-1 uppercase tracking-widest text-center font-mono font-bold text-lg"
+               placeholder="TPRO-XXXX-XXXX">
+        <button id="activate-btn" class="btn btn-purple px-6">Activer</button>
+      </div>
+      <p id="license-error" class="text-red-400 text-sm mt-2 hidden"></p>
+      <p class="text-gray-500 text-xs mt-3 text-center">
+        Une cle d'activation est requise pour creer une salle ou telecharger l'application.
+      </p>
     </div>
 
-    <!-- Join Room -->
+    <!-- License Status Banner (shown when licensed) -->
+    <div id="license-status" class="glass-card p-3 mb-4 hidden">
+      <div class="flex items-center justify-between gap-2 text-sm">
+        <span class="flex items-center gap-2">
+          <span class="text-green-400">&#9679;</span>
+          <span id="license-info" class="text-gray-300"></span>
+        </span>
+        <button id="logout-btn" class="text-gray-400 hover:text-red-400 text-xs underline">
+          Deconnexion
+        </button>
+      </div>
+    </div>
+
+    <!-- Licensed-only content -->
+    <div id="licensed-content" class="hidden">
+      <!-- Create Room -->
+      <div class="glass-card p-6 mb-4">
+        <button id="create-room-btn" class="btn btn-purple btn-lg w-full" data-i18n="create-room">
+          Creer une salle
+        </button>
+      </div>
+    </div>
+
+    <!-- Join Room (always visible — just need a room code) -->
     <div class="glass-card p-6 mb-6">
       <label class="section-label mb-3" data-i18n="join-room">Rejoindre une salle</label>
       <div class="flex gap-2">
@@ -50,8 +81,8 @@
       <p id="join-error" class="text-red-400 text-sm mt-2 hidden"></p>
     </div>
 
-    <!-- Overlay Download (hidden on mobile) -->
-    <div class="glass-card p-6 mb-4 hidden md:block">
+    <!-- Overlay Download (licensed-only, hidden on mobile) -->
+    <div id="download-section" class="glass-card p-6 mb-4 hidden md:block" style="display:none">
       <div class="text-center mb-3">
         <span class="text-lg font-bold">Timer Overlay</span>
         <p class="text-gray-400 text-xs mt-1">Fenetre transparente par-dessus PowerPoint</p>
@@ -89,6 +120,7 @@
     import { createRoom, roomExists } from '/js/room.js';
     import { initFirebase } from '/js/firebase-config.js';
     import { setLanguage, getLanguage, updatePageTranslations, t } from '/js/i18n.js';
+    import { isLicensed, validateLicense, loadStoredLicense, clearLicense, getLicenseData } from '/js/license.js';
 
     // Init Firebase
     const app = initializeApp(firebaseConfig);
@@ -104,8 +136,95 @@
       setLanguage(e.target.value);
     });
 
-    // Create room
+    // ===== License gating =====
+    const licenseGate = document.getElementById('license-gate');
+    const licenseStatus = document.getElementById('license-status');
+    const licensedContent = document.getElementById('licensed-content');
+    const downloadSection = document.getElementById('download-section');
+    const licenseInfo = document.getElementById('license-info');
+    const licenseKeyInput = document.getElementById('license-key-input');
+    const activateBtn = document.getElementById('activate-btn');
+    const licenseError = document.getElementById('license-error');
+    const logoutBtn = document.getElementById('logout-btn');
+
+    function showLicensedUI() {
+      licenseGate.classList.add('hidden');
+      licenseStatus.classList.remove('hidden');
+      licensedContent.classList.remove('hidden');
+      downloadSection.style.display = '';
+      const data = getLicenseData();
+      const hoursLeft = data && data.hoursLeft;
+      const plan = data && data.plan;
+      if (plan === 'master' || data?.unlimited) {
+        licenseInfo.textContent = 'Licence Master — acces illimite';
+      } else if (hoursLeft !== undefined) {
+        licenseInfo.textContent = `Licence active — ${hoursLeft}h restantes`;
+      } else {
+        licenseInfo.textContent = 'Licence active';
+      }
+    }
+
+    function showLockedUI() {
+      licenseGate.classList.remove('hidden');
+      licenseStatus.classList.add('hidden');
+      licensedContent.classList.add('hidden');
+      downloadSection.style.display = 'none';
+    }
+
+    // Auto-restore on load
+    (async () => {
+      const ok = await loadStoredLicense();
+      if (ok) showLicensedUI();
+      else showLockedUI();
+    })();
+
+    // Auto uppercase license input
+    licenseKeyInput.addEventListener('input', () => {
+      licenseKeyInput.value = licenseKeyInput.value.toUpperCase();
+    });
+
+    async function doActivate() {
+      const key = licenseKeyInput.value.trim().toUpperCase();
+      licenseError.classList.add('hidden');
+      if (!key) {
+        licenseError.textContent = 'Entrez une cle';
+        licenseError.classList.remove('hidden');
+        return;
+      }
+      activateBtn.disabled = true;
+      activateBtn.textContent = '...';
+      try {
+        const result = await validateLicense(key);
+        if (result.valid) {
+          showLicensedUI();
+          licenseKeyInput.value = '';
+        } else {
+          licenseError.textContent = result.error || 'Cle invalide';
+          licenseError.classList.remove('hidden');
+        }
+      } catch (err) {
+        licenseError.textContent = 'Erreur reseau';
+        licenseError.classList.remove('hidden');
+      }
+      activateBtn.disabled = false;
+      activateBtn.textContent = 'Activer';
+    }
+    activateBtn.addEventListener('click', doActivate);
+    licenseKeyInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') doActivate();
+    });
+
+    logoutBtn.addEventListener('click', () => {
+      clearLicense();
+      showLockedUI();
+    });
+
+    // Create room (requires license)
     document.getElementById('create-room-btn').addEventListener('click', async () => {
+      if (!isLicensed()) {
+        showLockedUI();
+        return;
+      }
       const btn = document.getElementById('create-room-btn');
       btn.disabled = true;
       btn.textContent = '...';
