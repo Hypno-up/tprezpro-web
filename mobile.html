@@ -228,8 +228,18 @@
   <!-- Timer -->
   <div class="timer-card">
     <div id="timer-display" class="timer-display">05:00</div>
+    <div id="mode-label" style="font-size:0.75rem;color:rgba(255,255,255,0.5);margin-top:0.25rem;">Countdown</div>
     <div class="progress-track">
       <div id="progress-bar" class="progress-bar" style="width:100%"></div>
+    </div>
+  </div>
+
+  <!-- Mode toggle -->
+  <div class="card">
+    <div class="card-title">Mode</div>
+    <div class="toggle-row">
+      <button id="mode-countdown-btn" class="toggle-btn btn-purple">&#x23F1;&#xFE0F; Countdown</button>
+      <button id="mode-countup-btn" class="toggle-btn btn-gray">&#x23EB; Chrono</button>
     </div>
   </div>
 
@@ -313,7 +323,7 @@
       initTimerEngine, startTimer, pauseTimer, resetTimer, setTime,
       setColor, setSize, setTransparency, setVisibility, setMessage,
       setMessagePosition, toggleLock, updateLocalState, getLocalState,
-      handleVisibilityChange
+      handleVisibilityChange, setMode, isOverflow
     } from '/js/timer-engine.js';
 
     // Room code
@@ -362,12 +372,36 @@
     }, 500);
 
     function renderState(state) {
+      const mode = state.mode || 'countdown';
       const t = state.timeLeft || 0;
-      const min = Math.floor(t / 60);
-      const sec = t % 60;
-      timerDisplay.textContent = String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+      const total = state.totalTime || 0;
+      const overflow = isOverflow(state);
 
-      const progress = state.totalTime > 0 ? (t / state.totalTime) * 100 : 0;
+      const sign = (mode === 'countup' && overflow) ? '+' : '';
+      const absT = (mode === 'countup' && overflow) ? (t - total) : t;
+      const min = Math.floor(absT / 60);
+      const sec = absT % 60;
+      timerDisplay.textContent = sign + String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+      timerDisplay.style.color = overflow ? '#ef4444' : '';
+
+      const modeLabel = document.getElementById('mode-label');
+      if (mode === 'countup') {
+        const tMin = Math.floor(total / 60);
+        const tSec = total % 60;
+        const tStr = String(tMin).padStart(2,'0') + ':' + String(tSec).padStart(2,'0');
+        modeLabel.textContent = overflow ? '⏫ Chrono — dépassement de ' + tStr : '⏫ Chrono — cible ' + tStr;
+      } else {
+        modeLabel.textContent = '⏱️ Countdown';
+      }
+
+      // Mode buttons
+      const cdBtn = document.getElementById('mode-countdown-btn');
+      const cuBtn = document.getElementById('mode-countup-btn');
+      cdBtn.className = mode === 'countdown' ? 'toggle-btn btn-purple' : 'toggle-btn btn-gray';
+      cuBtn.className = mode === 'countup' ? 'toggle-btn btn-purple' : 'toggle-btn btn-gray';
+
+      let progress = 0;
+      if (total > 0) progress = mode === 'countup' ? Math.min(100, (t / total) * 100) : (t / total) * 100;
       progressBar.style.width = progress + '%';
 
       visBtn.innerHTML = state.isVisible ? '&#x1F441;&#xFE0F; Visible' : '&#x1F648; Cache';
@@ -384,6 +418,16 @@
     document.getElementById('start-btn').addEventListener('click', () => startTimer());
     document.getElementById('pause-btn').addEventListener('click', () => pauseTimer());
     document.getElementById('reset-btn').addEventListener('click', () => resetTimer());
+
+    // Mode toggle
+    document.getElementById('mode-countdown-btn').addEventListener('click', () => {
+      if ((getLocalState().mode || 'countdown') === 'countdown') return;
+      setMode('countdown');
+    });
+    document.getElementById('mode-countup-btn').addEventListener('click', () => {
+      if (getLocalState().mode === 'countup') return;
+      setMode('countup');
+    });
 
     // Quick times
     document.querySelectorAll('.quick-btn').forEach(btn => {

@@ -24,6 +24,8 @@ function writeState(partial) {
 }
 
 // === Compute real timeLeft from timestamps (used once on sync) ===
+// In countdown mode: returns remaining seconds (floored at 0).
+// In countup mode:   returns elapsed seconds (no upper cap — keeps growing past totalTime).
 export function computeTimeLeft(state) {
   if (!state) return 0;
   if (!state.isRunning) return state.timeLeft || 0;
@@ -32,10 +34,36 @@ export function computeTimeLeft(state) {
   const base = state.startedTimeLeft != null ? state.startedTimeLeft : state.timeLeft;
   const tick = state.lastTick || now;
   const elapsed = Math.max(0, Math.round((now - tick) / 1000));
+
+  if (state.mode === 'countup') {
+    return base + elapsed;
+  }
   return Math.max(0, base - elapsed);
 }
 
-// === Local countdown (runs on every client for smooth display) ===
+// Should the timer blink based on current state? Centralised so all displays agree.
+export function shouldBlink(state) {
+  if (!state) return false;
+  if (state.isBlinking) return true; // manual blink override
+  const t = state.timeLeft || 0;
+  if (state.mode === 'countup') {
+    // Blink in the last `autoBlinkSeconds` before the target, AND continuously past the target
+    const total = state.totalTime || 0;
+    if (total > 0 && t >= total) return true; // overflow — keep blinking
+    const remaining = total - t;
+    return state.autoBlinkSeconds > 0 && remaining >= 0 && remaining <= state.autoBlinkSeconds;
+  }
+  // countdown
+  return state.autoBlinkSeconds > 0 && t > 0 && t <= state.autoBlinkSeconds;
+}
+
+// Is the timer in "overflow" (countup past target)? Used to force red color.
+export function isOverflow(state) {
+  if (!state || state.mode !== 'countup') return false;
+  return (state.totalTime || 0) > 0 && (state.timeLeft || 0) >= state.totalTime;
+}
+
+// === Local tick loop (runs on every client for smooth display) ===
 function startLocalCountdown() {
   stopLocalCountdown();
   localCountdown = setInterval(() => {
@@ -46,15 +74,24 @@ function startLocalCountdown() {
     // Always compute from timestamps — no drift, no delay
     localState.timeLeft = computeTimeLeft(localState);
 
-    if (localState.autoBlinkSeconds > 0 && localState.timeLeft <= localState.autoBlinkSeconds) {
-      localState.isBlinking = true;
-    }
-
-    if (localState.timeLeft === 0) {
-      localState.isRunning = false;
-      localState.isBlinking = false;
-      stopLocalCountdown();
-      writeState({ timeLeft: 0, isRunning: false, isBlinking: false });
+    if (localState.mode === 'countup') {
+      // Auto-blink in last `autoBlinkSeconds` before target (and past it)
+      const remaining = (localState.totalTime || 0) - localState.timeLeft;
+      if (localState.autoBlinkSeconds > 0 && remaining <= localState.autoBlinkSeconds) {
+        localState.isBlinking = true;
+      }
+      // Countup never auto-stops — keeps incrementing forever until user pauses
+    } else {
+      // countdown: blink near 0, stop at 0
+      if (localState.autoBlinkSeconds > 0 && localState.timeLeft <= localState.autoBlinkSeconds) {
+        localState.isBlinking = true;
+      }
+      if (localState.timeLeft === 0) {
+        localState.isRunning = false;
+        localState.isBlinking = false;
+        stopLocalCountdown();
+        writeState({ timeLeft: 0, isRunning: false, isBlinking: false });
+      }
     }
   }, 500); // 500ms for smoother updates
 }
@@ -69,7 +106,8 @@ function stopLocalCountdown() {
 // === Actions ===
 
 export function startTimer() {
-  if (localState.timeLeft <= 0) return;
+  // Countdown: can't start at 0. Countup: any value is fine (it counts up).
+  if (localState.mode !== 'countup' && localState.timeLeft <= 0) return;
   localState.isRunning = true;
   localState.lastTick = Date.now();
   localState.startedTimeLeft = localState.timeLeft;
@@ -95,12 +133,14 @@ export function pauseTimer() {
 export function resetTimer() {
   stopLocalCountdown();
   localState.isRunning = false;
-  localState.timeLeft = localState.totalTime;
+  // countdown resets to totalTime, countup resets to 0
+  const resetTo = localState.mode === 'countup' ? 0 : localState.totalTime;
+  localState.timeLeft = resetTo;
   localState.isBlinking = false;
   writeState({
     isRunning: false,
-    timeLeft: localState.totalTime,
-    startedTimeLeft: localState.totalTime,
+    timeLeft: resetTo,
+    startedTimeLeft: resetTo,
     isBlinking: false
   });
 }
@@ -108,14 +148,34 @@ export function resetTimer() {
 export function setTime(seconds) {
   stopLocalCountdown();
   localState.totalTime = seconds;
-  localState.timeLeft = seconds;
+  // countdown starts AT `seconds` (counting down). countup starts at 0 (with `seconds` as target).
+  const startAt = localState.mode === 'countup' ? 0 : seconds;
+  localState.timeLeft = startAt;
   localState.isRunning = false;
   localState.isBlinking = false;
   writeState({
     totalTime: seconds,
-    timeLeft: seconds,
-    startedTimeLeft: seconds,
+    timeLeft: startAt,
+    startedTimeLeft: startAt,
     isRunning: false,
+    isBlinking: false
+  });
+}
+
+// Switch between countdown and countup. Resets the timer to a sensible value for the new mode.
+export function setMode(mode) {
+  if (mode !== 'countdown' && mode !== 'countup') return;
+  stopLocalCountdown();
+  localState.mode = mode;
+  localState.isRunning = false;
+  localState.isBlinking = false;
+  const startAt = mode === 'countup' ? 0 : (localState.totalTime || 300);
+  localState.timeLeft = startAt;
+  writeState({
+    mode: mode,
+    isRunning: false,
+    timeLeft: startAt,
+    startedTimeLeft: startAt,
     isBlinking: false
   });
 }
@@ -196,7 +256,8 @@ export function handleVisibilityChange() {
   if (!localState.isRunning) return;
   // Recalculate on tab focus
   localState.timeLeft = computeTimeLeft(localState);
-  if (localState.timeLeft === 0) {
+  // Countdown auto-stops at 0; countup keeps running
+  if (localState.mode !== 'countup' && localState.timeLeft === 0) {
     localState.isRunning = false;
     localState.isBlinking = false;
     stopLocalCountdown();

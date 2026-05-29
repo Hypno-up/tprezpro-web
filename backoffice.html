@@ -88,8 +88,18 @@
         <!-- Timer preview -->
         <div class="glass-card p-4 text-center">
           <div id="timer-display" class="timer-preview mb-2">05:00</div>
+          <div id="mode-label" class="text-xs text-gray-400 mb-2">Countdown &mdash; cible 05:00</div>
           <div class="progress-track">
             <div id="progress-bar" class="progress-bar" style="width:100%"></div>
+          </div>
+        </div>
+
+        <!-- Mode toggle (Countdown / Chrono) -->
+        <div class="glass-card p-3">
+          <label class="section-label">Mode</label>
+          <div class="grid grid-cols-2 gap-2">
+            <button id="mode-countdown-btn" class="btn btn-purple py-2">&#x23F1;&#xFE0F; Countdown</button>
+            <button id="mode-countup-btn" class="btn btn-gray py-2">&#x23EB; Chrono</button>
           </div>
         </div>
 
@@ -346,7 +356,7 @@
       initTimerEngine, startTimer, pauseTimer, resetTimer, setTime,
       setColor, setSize, setTransparency, setVisibility, setMessage,
       setMessagePosition, toggleLock, updateLocalState, getLocalState,
-      handleVisibilityChange
+      handleVisibilityChange, setMode, isOverflow
     } from '/js/timer-engine.js';
     import { isLicensed, validateLicense, loadStoredLicense, getDemoMaxSeconds, getLicenseData } from '/js/license.js';
 
@@ -424,15 +434,51 @@
     }, 500);
 
     function renderState(state) {
+      const mode = state.mode || 'countdown';
       const tl = state.timeLeft || 0;
-      const min = Math.floor(tl / 60);
-      const sec = tl % 60;
-      timerDisplay.textContent = String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+      const total = state.totalTime || 0;
+      const overflow = isOverflow(state);
 
-      // Progress bar
-      const progress = state.totalTime > 0 ? (tl / state.totalTime) * 100 : 0;
+      // Display value: countdown shows tl, countup shows tl with overflow marker
+      const sign = (mode === 'countup' && overflow) ? '+' : '';
+      const absTime = (mode === 'countup' && overflow) ? (tl - total) : tl;
+      const min = Math.floor(absTime / 60);
+      const sec = absTime % 60;
+      timerDisplay.textContent = sign + String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+      timerDisplay.style.color = overflow ? '#ef4444' : '';
+
+      // Mode label
+      const modeLabelEl = document.getElementById('mode-label');
+      if (mode === 'countup') {
+        const targetMin = Math.floor(total / 60);
+        const targetSec = total % 60;
+        const targetStr = String(targetMin).padStart(2,'0') + ':' + String(targetSec).padStart(2,'0');
+        modeLabelEl.textContent = overflow
+          ? '⏫ Chrono — dépassement de la cible ' + targetStr
+          : '⏫ Chrono — cible ' + targetStr;
+      } else {
+        const totalMin = Math.floor(total / 60);
+        const totalSec = total % 60;
+        modeLabelEl.textContent = '⏱️ Countdown — départ ' +
+          String(totalMin).padStart(2,'0') + ':' + String(totalSec).padStart(2,'0');
+      }
+
+      // Mode buttons highlight
+      const cdBtn = document.getElementById('mode-countdown-btn');
+      const cuBtn = document.getElementById('mode-countup-btn');
+      cdBtn.className = mode === 'countdown' ? 'btn btn-purple py-2' : 'btn btn-gray py-2';
+      cuBtn.className = mode === 'countup' ? 'btn btn-purple py-2' : 'btn btn-gray py-2';
+
+      // Progress bar — countup fills as elapsed grows; countdown drains
+      let progress = 0;
+      if (total > 0) {
+        progress = mode === 'countup'
+          ? Math.min(100, (tl / total) * 100)
+          : (tl / total) * 100;
+      }
       progressBar.style.width = progress + '%';
-      if (progress > 50) progressBar.style.background = 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)';
+      if (overflow) progressBar.style.background = 'linear-gradient(90deg, #ef4444 0%, #b91c1c 100%)';
+      else if (progress > 50) progressBar.style.background = 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)';
       else if (progress > 25) progressBar.style.background = 'linear-gradient(90deg, #f093fb 0%, #f5576c 100%)';
       else progressBar.style.background = 'linear-gradient(90deg, #f5576c 0%, #ef4444 100%)';
 
@@ -469,6 +515,16 @@
     document.getElementById('start-btn').addEventListener('click', () => startTimer());
     document.getElementById('pause-btn').addEventListener('click', () => pauseTimer());
     document.getElementById('reset-btn').addEventListener('click', () => resetTimer());
+
+    // Mode toggle (Countdown / Chrono) — switching resets the timer
+    document.getElementById('mode-countdown-btn').addEventListener('click', () => {
+      if ((getLocalState().mode || 'countdown') === 'countdown') return;
+      setMode('countdown');
+    });
+    document.getElementById('mode-countup-btn').addEventListener('click', () => {
+      if (getLocalState().mode === 'countup') return;
+      setMode('countup');
+    });
 
     // Quick times
     document.querySelectorAll('.quick-time').forEach(btn => {

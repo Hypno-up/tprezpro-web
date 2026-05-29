@@ -292,13 +292,31 @@
       'text-9xl': 'size-text-9xl'
     };
 
-    // Compute timeLeft from timestamps (used once on sync)
+    // Compute timeLeft from timestamps. Mode-aware:
+    //   countdown: returns remaining (floored at 0)
+    //   countup:   returns elapsed (no cap — grows past totalTime)
     function computeTimeLeft(state) {
       if (!state || !state.isRunning) return state ? state.timeLeft : 0;
       const now = Date.now();
       const base = state.startedTimeLeft != null ? state.startedTimeLeft : state.timeLeft;
       const elapsed = Math.max(0, Math.round((now - (state.lastTick || now)) / 1000));
+      if (state.mode === 'countup') return base + elapsed;
       return Math.max(0, base - elapsed);
+    }
+
+    function isOverflowState(state) {
+      return state && state.mode === 'countup' && (state.totalTime || 0) > 0
+        && (state.timeLeft || 0) >= state.totalTime;
+    }
+
+    // Format with sign for countup overflow (e.g. "+00:23" past target)
+    function formatTimeForState(state, displayTime) {
+      const overflow = isOverflowState({ ...state, timeLeft: displayTime });
+      const total = state ? (state.totalTime || 0) : 0;
+      const absTime = overflow ? (displayTime - total) : displayTime;
+      const min = Math.floor(absTime / 60);
+      const sec = absTime % 60;
+      return (overflow ? '+' : '') + String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
     }
 
     function formatTime(seconds) {
@@ -322,13 +340,41 @@
         }
         // Always compute from timestamps — stays in sync
         displayTimeLeft = computeTimeLeft(currentState);
-        timerText.textContent = formatTime(displayTimeLeft);
-        if (displayTimeLeft === 0) {
+        currentState.timeLeft = displayTimeLeft;
+        timerText.textContent = formatTimeForState(currentState, displayTimeLeft);
+
+        // Apply running-state visual rules (blink near target / overflow color)
+        applyDynamicVisuals(currentState);
+
+        // Countdown auto-stops at 0. Countup never auto-stops.
+        if (currentState.mode !== 'countup' && displayTimeLeft === 0) {
           currentState.isRunning = false;
           clearInterval(localInterval);
           localInterval = null;
         }
       }, 500);
+    }
+
+    // Encapsulates the blink + overflow color rules so both the tick loop and the
+    // Firebase snapshot handler stay in sync without duplicating the logic.
+    function applyDynamicVisuals(state) {
+      const t = state.timeLeft || 0;
+      const total = state.totalTime || 0;
+      const overflow = isOverflowState(state);
+      const isCountup = state.mode === 'countup';
+      const blinkRemaining = isCountup ? (total - t) : t;
+      const shouldBlink = state.isBlinking
+        || overflow
+        || (state.isRunning && total > 0 && blinkRemaining >= 0 && blinkRemaining <= 30);
+      if (shouldBlink) timerText.classList.add('blinking');
+      else timerText.classList.remove('blinking');
+
+      // Overflow color (red), unless user set an explicit color
+      if (overflow && !state.color) {
+        timerText.classList.add('solid-color');
+        timerText.style.color = '#ef4444';
+        timerText.style.filter = 'drop-shadow(0 0 30px rgba(239, 68, 68, 0.7))';
+      }
     }
 
     // Listen to state changes from Firebase
@@ -342,12 +388,13 @@
 
       if (state.isRunning) {
         displayTimeLeft = computeTimeLeft(state);
-        timerText.textContent = formatTime(displayTimeLeft);
+        currentState.timeLeft = displayTimeLeft;
+        timerText.textContent = formatTimeForState(currentState, displayTimeLeft);
         if (!localInterval) startLocalTick();
       } else {
         if (localInterval) { clearInterval(localInterval); localInterval = null; }
         displayTimeLeft = state.timeLeft || 0;
-        timerText.textContent = formatTime(displayTimeLeft);
+        timerText.textContent = formatTimeForState(state, displayTimeLeft);
       }
 
       // Visibility
@@ -375,12 +422,8 @@
       // Transparency
       timerContainer.style.opacity = (state.transparency || 100) / 100;
 
-      // Blinking
-      if (state.isBlinking || (state.isRunning && realTime > 0 && realTime <= 30)) {
-        timerText.classList.add('blinking');
-      } else {
-        timerText.classList.remove('blinking');
-      }
+      // Blinking + overflow color — centralised in applyDynamicVisuals
+      applyDynamicVisuals(state);
 
       // Message
       if (state.message && state.message.trim()) {

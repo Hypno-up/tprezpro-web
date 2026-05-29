@@ -145,18 +145,30 @@
     var localInterval = null;
 
     // Compute time left from timestamps (same logic as timer-engine.js)
+    // Mode-aware: countup returns elapsed (uncapped), countdown returns remaining (>=0).
     function computeTimeLeft(state) {
       if (!state || !state.isRunning) return state ? (state.timeLeft || 0) : 0;
       var now = Date.now();
-      var base = state.startedTimeLeft || state.timeLeft || 0;
+      var base = state.startedTimeLeft != null ? state.startedTimeLeft : (state.timeLeft || 0);
       var elapsed = Math.floor((now - (state.lastTick || now)) / 1000);
+      if (state.mode === 'countup') return base + elapsed;
       return Math.max(0, base - elapsed);
     }
 
-    function renderTime(timeLeft) {
-      var min = Math.floor(timeLeft / 60);
-      var sec = timeLeft % 60;
-      timerText.textContent = String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+    function isOverflowState(state) {
+      return state && state.mode === 'countup' && (state.totalTime || 0) > 0
+        && (state.timeLeft || 0) >= state.totalTime;
+    }
+
+    function renderTime(timeLeft, state) {
+      var s = state || currentState || {};
+      var total = s.totalTime || 0;
+      var overflow = s.mode === 'countup' && total > 0 && timeLeft >= total;
+      var displayed = overflow ? (timeLeft - total) : timeLeft;
+      var min = Math.floor(displayed / 60);
+      var sec = displayed % 60;
+      timerText.textContent = (overflow ? '+' : '') +
+        String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
     }
 
     function startLocalCountdown() {
@@ -167,12 +179,23 @@
           return;
         }
         var tl = computeTimeLeft(currentState);
-        renderTime(tl);
-        // Blinking when low
-        if (tl > 0 && tl <= 30) {
+        currentState.timeLeft = tl;
+        renderTime(tl, currentState);
+
+        var total = currentState.totalTime || 0;
+        var isCountup = currentState.mode === 'countup';
+        var remaining = isCountup ? (total - tl) : tl;
+        var overflow = isCountup && total > 0 && tl >= total;
+
+        // Blink in last 30s OR while overflowing in countup
+        if (overflow || (remaining > 0 && remaining <= 30)) {
           timerText.classList.add('blinking');
+        } else {
+          timerText.classList.remove('blinking');
         }
-        if (tl === 0) {
+
+        // Countdown auto-stops at 0; countup keeps going
+        if (!isCountup && tl === 0) {
           currentState.isRunning = false;
           timerText.classList.remove('blinking');
           stopLocalCountdown();
@@ -210,18 +233,26 @@
 
       // Time display — use computeTimeLeft for running timers
       if (nowRunning) {
-        renderTime(computeTimeLeft(state));
+        var tl = computeTimeLeft(state);
+        state.timeLeft = tl;
+        renderTime(tl, state);
         if (!localInterval) startLocalCountdown();
       } else {
         stopLocalCountdown();
-        renderTime(state.timeLeft || 0);
+        renderTime(state.timeLeft || 0, state);
       }
+
+      var overflow = isOverflowState(state);
 
       // Visibility
       timerContainer.classList.toggle('hidden-state', !state.isVisible);
 
-      // Color
-      if (state.color) {
+      // Color — overflow in countup forces red (unless user set a colour)
+      if (overflow && !state.color) {
+        timerText.classList.add('solid-color');
+        timerText.style.color = '#ef4444';
+        timerText.style.filter = 'drop-shadow(0 0 30px rgba(239, 68, 68, 0.7))';
+      } else if (state.color) {
         timerText.classList.add('solid-color');
         timerText.style.color = state.color;
         timerText.style.filter = 'drop-shadow(0 0 30px ' + state.color + '80)';
@@ -233,15 +264,20 @@
 
       // Size
       timerText.className = 'timer-text ' + (sizeMap[state.size] || 'size-text-6xl');
-      if (state.color) timerText.classList.add('solid-color');
+      if (state.color || overflow) timerText.classList.add('solid-color');
 
       // Transparency - use Electron API for real window transparency
       if (window.electronAPI) {
         window.electronAPI.setOpacity((state.transparency || 100) / 100);
       }
 
-      // Blinking
-      if (state.isBlinking || (state.isRunning && state.timeLeft > 0 && state.timeLeft <= 30)) {
+      // Blinking — mode-aware (countup: last 30s before target + permanent past target)
+      var total = state.totalTime || 0;
+      var isCountup = state.mode === 'countup';
+      var tlNow = state.timeLeft || 0;
+      var remaining = isCountup ? (total - tlNow) : tlNow;
+      var nearLimit = (remaining >= 0 && remaining <= 30);
+      if (state.isBlinking || overflow || (state.isRunning && total > 0 && nearLimit)) {
         timerText.classList.add('blinking');
       } else {
         timerText.classList.remove('blinking');

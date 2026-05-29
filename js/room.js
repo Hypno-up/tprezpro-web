@@ -5,8 +5,9 @@ const ROOM_CODE_LENGTH = 6;
 const ROOM_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No I,O,0,1 to avoid confusion
 
 const DEFAULT_STATE = {
-  timeLeft: 300,
-  totalTime: 300,
+  mode: 'countdown', // 'countdown' (default, counts down to 0) | 'countup' (counts up from 0 to totalTime, keeps going past target)
+  timeLeft: 300,    // countdown: remaining seconds. countup: elapsed seconds.
+  totalTime: 300,   // countdown: initial duration. countup: target (warning threshold).
   isRunning: false,
   isVisible: true,
   color: null,
