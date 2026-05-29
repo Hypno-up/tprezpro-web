@@ -6,9 +6,13 @@ const os = require('os');
 const fs = require('fs');
 
 // Windows transparency fix
+// v1.8.1: replaced `disable-gpu` (breaks Firebase WebSocket in some Chromium configs)
+// with `--use-gl=swiftshader` — software GL keeps transparency working while
+// leaving the network stack untouched.
 if (process.platform === 'win32') {
   app.commandLine.appendSwitch('enable-transparent-visuals');
-  app.commandLine.appendSwitch('disable-gpu');
+  app.commandLine.appendSwitch('use-gl', 'swiftshader');
+  app.commandLine.appendSwitch('disable-gpu-compositing');
 }
 
 let displayWindow = null;

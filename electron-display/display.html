@@ -114,7 +114,18 @@
       appId: "1:190667786733:web:dcd2a2d52855ca63cc7fe4"
     };
 
-    firebase.initializeApp(firebaseConfig);
+    try {
+      firebase.initializeApp(firebaseConfig);
+    } catch (e) {
+      document.getElementById('timer-text').innerHTML =
+        '<span class="connecting" style="color:#f87171;font-size:0.8rem;">Firebase init failed: ' + (e && e.message ? e.message : e) + '</span>';
+      throw e;
+    }
+    if (typeof firebase === 'undefined' || !firebase.database) {
+      document.getElementById('timer-text').innerHTML =
+        '<span class="connecting" style="color:#f87171;font-size:0.8rem;">Firebase SDK not loaded (check internet / gstatic.com blocked)</span>';
+      throw new Error('Firebase SDK missing');
+    }
     var db = firebase.database();
 
     var timerContainer = document.getElementById('timer-container');
@@ -175,6 +186,14 @@
         localInterval = null;
       }
     }
+
+    // Connection state with timeout (v1.8.1 — surfaces network/Firebase issues)
+    var connectionAttempts = 0;
+    setTimeout(function() {
+      if (!connected) {
+        timerText.innerHTML = '<span class="connecting" style="font-size:0.8rem;">Pas de reponse Firebase (10s) — verifiez pare-feu Windows / proxy</span>';
+      }
+    }, 10000);
 
     // Listen to state
     db.ref('rooms/' + roomCode + '/state').on('value', function(snapshot) {
@@ -244,13 +263,26 @@
       } else {
         messageText.style.opacity = '0';
       }
+    }, function(err) {
+      timerText.innerHTML = '<span class="connecting" style="color:#f87171;font-size:0.8rem;">Lecture salle refusee: ' + err.message + '</span>';
     });
 
-    // Connection error handling
+    // Connection error handling — surface error from .on second arg + drop count
+    var dropCount = 0;
     db.ref('.info/connected').on('value', function(snap) {
-      if (!snap.val() && !connected) {
-        timerText.innerHTML = '<span class="connecting">Connexion en cours...</span>';
+      if (snap.val()) {
+        // connected — only clear the message if we haven't received room data yet
+        if (!connected) {
+          timerText.innerHTML = '<span class="connecting">Connecte, attente donnees salle...</span>';
+        }
+      } else {
+        dropCount++;
+        if (!connected) {
+          timerText.innerHTML = '<span class="connecting">Connexion Firebase (tentative ' + dropCount + ')...</span>';
+        }
       }
+    }, function(err) {
+      timerText.innerHTML = '<span class="connecting" style="color:#f87171;font-size:0.8rem;">.info/connected error: ' + err.message + '</span>';
     });
   </script>
 </body>
