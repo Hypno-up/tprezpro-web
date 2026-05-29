@@ -19,7 +19,7 @@ jobs:
         run: npm install
       - name: Build Mac DMG (ARM64 + x64)
         working-directory: electron-display
-        run: npx electron-builder --mac --arm64 --x64
+        run: npx electron-builder --mac dmg --arm64 --x64
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
       - name: Upload Mac artifacts
@@ -27,6 +27,7 @@ jobs:
         with:
           name: mac-builds
           path: electron-display/dist/*.dmg
+          if-no-files-found: error
 
   build-windows:
     runs-on: windows-latest
@@ -38,14 +39,20 @@ jobs:
       - name: Install dependencies
         working-directory: electron-display
         run: npm install
+      # Windows runner can produce both NSIS portable .exe and ZIP. We force NSIS portable
+      # here so users get a single-file installer like the Mac DMG; ZIP is for fallback /
+      # local Mac cross-builds (NSIS portable can't be built reliably on macOS).
       - name: Build Windows portable
         working-directory: electron-display
-        run: npx electron-builder --win
+        run: npx electron-builder --win portable --x64
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows-builds
-          path: electron-display/dist/*.exe
+          path: |
+            electron-display/dist/*.exe
+            electron-display/dist/*.zip
+          if-no-files-found: error
 
   release:
     needs: [build-mac, build-windows]
@@ -63,9 +70,10 @@ jobs:
         with:
           name: windows-builds
           path: dist
-      - name: Create Release
+      - name: Create / update Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: dist/*
           generate_release_notes: true
+          fail_on_unmatched_files: true
