@@ -144,20 +144,31 @@
     var currentState = null;
     var localInterval = null;
 
-    // Compute time left from timestamps (same logic as timer-engine.js)
-    // Mode-aware: countup returns elapsed (uncapped), countdown returns remaining (>=0).
+    // Compute the displayed value. Mode-aware:
+    //   countdown: returns remaining (floored at 0)
+    //   countup:   returns elapsed (no cap — grows past totalTime), reads `chronoBase`
+    //              (Firebase keeps `timeLeft` at 999999 as a legacy-engine guard).
     function computeTimeLeft(state) {
-      if (!state || !state.isRunning) return state ? (state.timeLeft || 0) : 0;
-      var now = Date.now();
-      var base = state.startedTimeLeft != null ? state.startedTimeLeft : (state.timeLeft || 0);
-      var elapsed = Math.floor((now - (state.lastTick || now)) / 1000);
-      if (state.mode === 'countup') return base + elapsed;
-      return Math.max(0, base - elapsed);
+      if (!state) return 0;
+      if (state.mode === 'countup') {
+        var base = state.chronoBase != null ? state.chronoBase : 0;
+        if (!state.isRunning) return base;
+        var now = Date.now();
+        var elapsed = Math.floor((now - (state.lastTick || now)) / 1000);
+        return base + (elapsed < 0 ? 0 : elapsed);
+      }
+      if (!state.isRunning) return state.timeLeft || 0;
+      var now2 = Date.now();
+      var base2 = state.startedTimeLeft != null ? state.startedTimeLeft : (state.timeLeft || 0);
+      var elapsed2 = Math.floor((now2 - (state.lastTick || now2)) / 1000);
+      return Math.max(0, base2 - elapsed2);
     }
 
     function isOverflowState(state) {
-      return state && state.mode === 'countup' && (state.totalTime || 0) > 0
-        && (state.timeLeft || 0) >= state.totalTime;
+      if (!state || state.mode !== 'countup') return false;
+      var total = state.totalTime || 0;
+      var elapsed = computeTimeLeft(state);
+      return total > 0 && elapsed >= total;
     }
 
     function renderTime(timeLeft, state) {
@@ -231,15 +242,14 @@
       currentState = state;
       connected = true;
 
-      // Time display — use computeTimeLeft for running timers
+      // Time display — computeTimeLeft is mode-aware (countup → chronoBase + elapsed)
+      var tl = computeTimeLeft(state);
+      state.timeLeft = tl;
+      renderTime(tl, state);
       if (nowRunning) {
-        var tl = computeTimeLeft(state);
-        state.timeLeft = tl;
-        renderTime(tl, state);
         if (!localInterval) startLocalCountdown();
       } else {
         stopLocalCountdown();
-        renderTime(state.timeLeft || 0, state);
       }
 
       var overflow = isOverflowState(state);

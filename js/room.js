@@ -6,7 +6,8 @@ const ROOM_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No I,O,0,1 to avo
 
 const DEFAULT_STATE = {
   mode: 'countdown', // 'countdown' (default, counts down to 0) | 'countup' (counts up from 0 to totalTime, keeps going past target)
-  timeLeft: 300,    // countdown: remaining seconds. countup: elapsed seconds.
+  timeLeft: 300,    // countdown: remaining seconds. countup: sentinel (Firebase always stores 999999 to keep legacy engines from auto-stopping at 0; real elapsed is in chronoBase).
+  chronoBase: 0,    // countup only: elapsed seconds at the moment isRunning last changed. live elapsed = chronoBase + (now - lastTick) when running, else just chronoBase.
   totalTime: 300,   // countdown: initial duration. countup: target (warning threshold).
   isRunning: false,
   isVisible: true,

@@ -292,21 +292,32 @@
       'text-9xl': 'size-text-9xl'
     };
 
-    // Compute timeLeft from timestamps. Mode-aware:
+    // Compute the displayed value. Mode-aware:
     //   countdown: returns remaining (floored at 0)
-    //   countup:   returns elapsed (no cap — grows past totalTime)
+    //   countup:   returns elapsed (no cap — grows past totalTime), reads chronoBase
+    //              (Firebase keeps `timeLeft` at 999999 as a legacy-engine guard).
     function computeTimeLeft(state) {
-      if (!state || !state.isRunning) return state ? state.timeLeft : 0;
+      if (!state) return 0;
+      if (state.mode === 'countup') {
+        const base = state.chronoBase != null ? state.chronoBase : 0;
+        if (!state.isRunning) return base;
+        const now = Date.now();
+        const elapsed = Math.max(0, Math.round((now - (state.lastTick || now)) / 1000));
+        return base + elapsed;
+      }
+      if (!state.isRunning) return state.timeLeft || 0;
       const now = Date.now();
       const base = state.startedTimeLeft != null ? state.startedTimeLeft : state.timeLeft;
       const elapsed = Math.max(0, Math.round((now - (state.lastTick || now)) / 1000));
-      if (state.mode === 'countup') return base + elapsed;
       return Math.max(0, base - elapsed);
     }
 
     function isOverflowState(state) {
-      return state && state.mode === 'countup' && (state.totalTime || 0) > 0
-        && (state.timeLeft || 0) >= state.totalTime;
+      if (!state || state.mode !== 'countup') return false;
+      const total = state.totalTime || 0;
+      // Use computed elapsed, never the raw `timeLeft` (which is the sentinel in countup).
+      const elapsed = computeTimeLeft(state);
+      return total > 0 && elapsed >= total;
     }
 
     // Format with sign for countup overflow (e.g. "+00:23" past target)
@@ -386,15 +397,15 @@
       const wasRunning = currentState ? currentState.isRunning : false;
       currentState = state;
 
+      // computeTimeLeft is mode-aware (countup uses chronoBase, ignoring sentinel `timeLeft`)
+      displayTimeLeft = computeTimeLeft(state);
+      currentState.timeLeft = displayTimeLeft;
+      timerText.textContent = formatTimeForState(currentState, displayTimeLeft);
+
       if (state.isRunning) {
-        displayTimeLeft = computeTimeLeft(state);
-        currentState.timeLeft = displayTimeLeft;
-        timerText.textContent = formatTimeForState(currentState, displayTimeLeft);
         if (!localInterval) startLocalTick();
       } else {
         if (localInterval) { clearInterval(localInterval); localInterval = null; }
-        displayTimeLeft = state.timeLeft || 0;
-        timerText.textContent = formatTimeForState(state, displayTimeLeft);
       }
 
       // Visibility
