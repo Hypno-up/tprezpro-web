@@ -221,16 +221,48 @@
       }
     }
 
-    // Connection state with timeout (v1.8.1 — surfaces network/Firebase issues)
-    var connectionAttempts = 0;
+    // v1.8.4 — diagnostic harness. If after 5s the on() listener still hasn't
+    // delivered data, surface what we know on screen so we don't end up stuck on
+    // "Connecte, attente donnees salle..." with no actionable info.
+    var diag = {
+      onceFired: false,
+      onceErr: null,
+      listenerFired: false,
+      listenerErr: null
+    };
+
+    // Parallel one-shot read — if even THIS doesn't return, the issue is
+    // network/permissions/SDK, not the long-lived subscription.
+    db.ref('rooms/' + roomCode + '/state').once('value')
+      .then(function(snap) {
+        diag.onceFired = true;
+        diag.onceData = snap.val() ? 'OK' : 'EMPTY';
+      })
+      .catch(function(err) {
+        diag.onceErr = (err && err.message) || String(err);
+      });
+
+    setTimeout(function() {
+      if (connected) return; // listener already delivered, nothing to diagnose
+      var lines = [
+        'Diagnostic Firebase apres 5s :',
+        'salle = ' + roomCode,
+        'on()  = ' + (diag.listenerFired ? 'OK' : (diag.listenerErr || 'aucun callback')),
+        'once()= ' + (diag.onceFired ? (diag.onceData || 'OK') : (diag.onceErr || 'aucun callback'))
+      ];
+      timerText.innerHTML = '<span class="connecting" style="font-size:0.75rem;color:#fbbf24;white-space:pre;text-align:left;display:inline-block;">' +
+        lines.join('\n') + '</span>';
+    }, 5000);
+
     setTimeout(function() {
       if (!connected) {
-        timerText.innerHTML = '<span class="connecting" style="font-size:0.8rem;">Pas de reponse Firebase (10s) — verifiez pare-feu Windows / proxy</span>';
+        timerText.innerHTML += '<br><span class="connecting" style="font-size:0.7rem;color:#f87171;">Pas de reponse Firebase apres 15s — verifiez pare-feu / proxy</span>';
       }
-    }, 10000);
+    }, 15000);
 
     // Listen to state
     db.ref('rooms/' + roomCode + '/state').on('value', function(snapshot) {
+      diag.listenerFired = true;
       var state = snapshot.val();
       if (!state) {
         timerText.innerHTML = '<span class="connecting">Salle introuvable: ' + roomCode + '</span>';
@@ -310,7 +342,8 @@
         messageText.style.opacity = '0';
       }
     }, function(err) {
-      timerText.innerHTML = '<span class="connecting" style="color:#f87171;font-size:0.8rem;">Lecture salle refusee: ' + err.message + '</span>';
+      diag.listenerErr = (err && err.message) || String(err);
+      timerText.innerHTML = '<span class="connecting" style="color:#f87171;font-size:0.8rem;">Lecture salle refusee: ' + diag.listenerErr + '</span>';
     });
 
     // Connection error handling — surface error from .on second arg + drop count
