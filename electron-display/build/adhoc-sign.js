@@ -8,6 +8,8 @@ const path = require('path');
 
 exports.default = async function adhocSign(context) {
   if (context.electronPlatformName !== 'darwin') return;
+  // A real Developer ID certificate is provided: electron-builder signs properly instead.
+  if (process.env.CSC_LINK) return;
   const appPath = path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`);
   console.log(`  • ad-hoc signing ${appPath}`);
   execFileSync('codesign', ['--force', '--deep', '--sign', '-', appPath], { stdio: 'inherit' });
