@@ -8,6 +8,18 @@ let roomCode = null;
 let firebaseRef = null;
 let firebaseUpdate = null;
 let localCountdown = null; // local interval for smooth ticking
+let serverTimeOffset = 0; // ms to add to Date.now() to get Firebase server time
+
+// Every device computes elapsed time against `lastTick`, which another device wrote.
+// Using Firebase's server clock (via `.info/serverTimeOffset`) keeps displays in sync
+// even when a machine's own clock is a few seconds off.
+export function setServerTimeOffset(offsetMs) {
+  serverTimeOffset = Number(offsetMs) || 0;
+}
+
+export function serverNow() {
+  return Date.now() + serverTimeOffset;
+}
 
 export function initTimerEngine(firebase, code, initialState) {
   roomCode = code;
@@ -40,7 +52,7 @@ export function computeTimeLeft(state) {
   if (state.mode === 'countup') {
     const base = state.chronoBase != null ? state.chronoBase : 0;
     if (!state.isRunning) return base;
-    const now = Date.now();
+    const now = serverNow();
     const tick = state.lastTick || now;
     const elapsed = Math.max(0, Math.round((now - tick) / 1000));
     return base + elapsed;
@@ -48,7 +60,7 @@ export function computeTimeLeft(state) {
 
   // countdown
   if (!state.isRunning) return state.timeLeft || 0;
-  const now = Date.now();
+  const now = serverNow();
   const base = state.startedTimeLeft != null ? state.startedTimeLeft : state.timeLeft;
   const tick = state.lastTick || now;
   const elapsed = Math.max(0, Math.round((now - tick) / 1000));
@@ -123,11 +135,11 @@ export function startTimer() {
   // Countdown: can't start at 0. Countup: any value is fine (it counts up).
   if (localState.mode !== 'countup' && localState.timeLeft <= 0) return;
   localState.isRunning = true;
-  localState.lastTick = Date.now();
+  localState.lastTick = serverNow();
 
   if (localState.mode === 'countup') {
     // Snapshot current elapsed (localState.timeLeft) as the new chronoBase.
-    // Live elapsed from now on = chronoBase + (Date.now() - lastTick) / 1000.
+    // Live elapsed from now on = chronoBase + (serverNow() - lastTick) / 1000.
     localState.chronoBase = localState.timeLeft || 0;
     localState.startedTimeLeft = COUNTUP_SENTINEL;
     writeState({
@@ -267,7 +279,8 @@ export function setColor(color) {
 
 export function setSize(size) {
   localState.size = size;
-  writeState({ size });
+  localState.fontSizePx = null;
+  writeState({ size, fontSizePx: null });
 }
 
 export function setTransparency(value) {
@@ -288,6 +301,28 @@ export function setMessage(message) {
 export function setMessagePosition(position) {
   localState.messagePosition = position;
   writeState({ messagePosition: position });
+}
+
+export function setDisplayMode(displayMode) {
+  if (displayMode !== 'timer' && displayMode !== 'clock') return;
+  localState.displayMode = displayMode;
+  writeState({ displayMode });
+}
+
+export function setGlow(glow) {
+  localState.glow = !!glow;
+  writeState({ glow: localState.glow });
+}
+
+export function setFontFamily(fontFamily) {
+  localState.fontFamily = fontFamily;
+  writeState({ fontFamily });
+}
+
+// Slider size in px. Presets (setSize) clear it so S/M/L/XL keep working on older overlays.
+export function setFontSizePx(px) {
+  localState.fontSizePx = px;
+  writeState({ fontSizePx: px });
 }
 
 export function toggleLock() {

@@ -19,7 +19,11 @@ const DEFAULT_STATE = {
   message: '',
   messagePosition: 'below',
   isLocked: false,
-  lastTick: 0
+  lastTick: 0,
+  displayMode: 'timer', // 'timer' (countdown/chrono) | 'clock' (current time HH:MM) — external display only
+  glow: true,           // halo (drop-shadow) around the displayed digits
+  fontFamily: 'system', // key of FONTS in js/display-options.js
+  fontSizePx: null      // slider value in px; null = use the `size` preset (S/M/L/XL)
 };
 
 function generateRoomCode() {

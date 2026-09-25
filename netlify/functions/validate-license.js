@@ -1,30 +1,4 @@
-const https = require('https');
-
-// Firebase REST API
-const FIREBASE_DB_URL = 'https://tprezpro-web-default-rtdb.europe-west1.firebasedatabase.app';
-
-function firebaseRequest(path, method = 'GET', data = null) {
-  return new Promise((resolve, reject) => {
-    const url = new URL(`${FIREBASE_DB_URL}${path}.json`);
-    const options = {
-      hostname: url.hostname,
-      path: url.pathname + url.search,
-      method,
-      headers: { 'Content-Type': 'application/json' }
-    };
-    const req = https.request(options, (res) => {
-      let body = '';
-      res.on('data', c => body += c);
-      res.on('end', () => {
-        try { resolve(JSON.parse(body)); }
-        catch { resolve(body); }
-      });
-    });
-    req.on('error', reject);
-    if (data) req.write(JSON.stringify(data));
-    req.end();
-  });
-}
+const { firebaseRequest } = require('../lib/firebase-rest');
 
 exports.handler = async (event) => {
   const headers = {
@@ -50,7 +24,11 @@ exports.handler = async (event) => {
     }
 
     // Lookup license in Firebase
-    const license = await firebaseRequest(`/licenses/${licenseKey.toUpperCase()}`);
+    const key = licenseKey.trim().toUpperCase();
+    if (!/^[A-Z0-9-]{4,40}$/.test(key)) {
+      return { statusCode: 200, headers, body: JSON.stringify({ valid: false, error: 'Cle invalide' }) };
+    }
+    const license = await firebaseRequest(`/licenses/${key}`);
 
     if (!license || license === 'null') {
       return { statusCode: 200, headers, body: JSON.stringify({ valid: false, error: 'Cle invalide' }) };
@@ -87,7 +65,7 @@ exports.handler = async (event) => {
 
       if (hoursElapsed > durationHours) {
         // Mark as expired
-        await firebaseRequest(`/licenses/${licenseKey.toUpperCase()}`, 'PATCH', { expired: true });
+        await firebaseRequest(`/licenses/${key}`, 'PATCH', { expired: true });
         return { statusCode: 200, headers, body: JSON.stringify({ valid: false, error: 'Cle expiree' }) };
       }
 
@@ -112,7 +90,7 @@ exports.handler = async (event) => {
     const durationHours = license.durationHours || 24;
     const expiresAt = new Date(now.getTime() + durationHours * 60 * 60 * 1000);
 
-    await firebaseRequest(`/licenses/${licenseKey.toUpperCase()}`, 'PATCH', {
+    await firebaseRequest(`/licenses/${key}`, 'PATCH', {
       activatedAt: now.toISOString(),
       machineId: machineId || 'web-' + Date.now(),
       expired: false
@@ -132,6 +110,7 @@ exports.handler = async (event) => {
     };
 
   } catch (err) {
-    return { statusCode: 500, headers, body: JSON.stringify({ valid: false, error: 'Erreur serveur: ' + err.message }) };
+    console.error('validate-license:', err);
+    return { statusCode: 500, headers, body: JSON.stringify({ valid: false, error: 'Erreur serveur' }) };
   }
 };

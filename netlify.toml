@@ -25,3 +25,14 @@
   from = "/control/:code"
   to = "/mobile.html?room=:code"
   status = 200
+
+# Daily cleanup of rooms inactive for 30+ days
+[functions."cleanup-rooms"]
+  schedule = "@daily"
+
+# Display fonts are also loaded by the Electron overlay (file:// origin)
+[[headers]]
+  for = "/fonts/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Cache-Control = "public, max-age=31536000"

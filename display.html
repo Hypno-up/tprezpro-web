@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Timer Display</title>
+  <link rel="stylesheet" href="/fonts/fonts.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -218,6 +219,7 @@
     import { firebaseConfig, initFirebase } from '/js/firebase-config.js';
     import { getRoomCodeFromURL } from '/js/room.js';
     import { getLanguage } from '/js/i18n.js';
+    import { fontCss, fontSizePx, formatClock } from '/js/display-options.js';
 
     // Get room code
     const roomCode = getRoomCodeFromURL();
@@ -230,6 +232,11 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
     initFirebase({ initializeApp: () => app }, { getDatabase: () => db });
+
+    // Firebase server clock offset, so this screen agrees with the one that pressed Start
+    let serverTimeOffset = 0;
+    onValue(ref(db, '.info/serverTimeOffset'), (snap) => { serverTimeOffset = Number(snap.val()) || 0; });
+    const serverNow = () => Date.now() + serverTimeOffset;
 
     // Elements
     const timerContainer = document.getElementById('timer-container');
@@ -284,14 +291,6 @@
       }
     });
 
-    // Size map
-    const sizeMap = {
-      'text-4xl': 'size-text-4xl',
-      'text-6xl': 'size-text-6xl',
-      'text-8xl': 'size-text-8xl',
-      'text-9xl': 'size-text-9xl'
-    };
-
     // Compute the displayed value. Mode-aware:
     //   countdown: returns remaining (floored at 0)
     //   countup:   returns elapsed (no cap — grows past totalTime), reads chronoBase
@@ -301,12 +300,12 @@
       if (state.mode === 'countup') {
         const base = state.chronoBase != null ? state.chronoBase : 0;
         if (!state.isRunning) return base;
-        const now = Date.now();
+        const now = serverNow();
         const elapsed = Math.max(0, Math.round((now - (state.lastTick || now)) / 1000));
         return base + elapsed;
       }
       if (!state.isRunning) return state.timeLeft || 0;
-      const now = Date.now();
+      const now = serverNow();
       const base = state.startedTimeLeft != null ? state.startedTimeLeft : state.timeLeft;
       const elapsed = Math.max(0, Math.round((now - (state.lastTick || now)) / 1000));
       return Math.max(0, base - elapsed);
@@ -328,6 +327,12 @@
       const min = Math.floor(absTime / 60);
       const sec = absTime % 60;
       return (overflow ? '+' : '') + String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+    }
+
+    // Text for the big display: current time in clock mode, otherwise the timer value.
+    function displayText(state, displayTime) {
+      if (state && state.displayMode === 'clock') return formatClock(serverNow());
+      return formatTimeForState(state, displayTime);
     }
 
     function formatTime(seconds) {
@@ -352,7 +357,7 @@
         // Always compute from timestamps — stays in sync
         displayTimeLeft = computeTimeLeft(currentState);
         currentState.timeLeft = displayTimeLeft;
-        timerText.textContent = formatTimeForState(currentState, displayTimeLeft);
+        timerText.textContent = displayText(currentState, displayTimeLeft);
 
         // Apply running-state visual rules (blink near target / overflow color)
         applyDynamicVisuals(currentState);
@@ -369,6 +374,12 @@
     // Encapsulates the blink + overflow color rules so both the tick loop and the
     // Firebase snapshot handler stay in sync without duplicating the logic.
     function applyDynamicVisuals(state) {
+      // Clock mode: plain time, no blink / overflow styling
+      if (state.displayMode === 'clock') {
+        timerText.classList.remove('blinking');
+        applyGlow(state);
+        return;
+      }
       const t = state.timeLeft || 0;
       const total = state.totalTime || 0;
       const overflow = isOverflowState(state);
@@ -386,7 +397,20 @@
         timerText.style.color = '#ef4444';
         timerText.style.filter = 'drop-shadow(0 0 30px rgba(239, 68, 68, 0.7))';
       }
+      applyGlow(state);
     }
+
+    // Halo on/off (the drop-shadow set by the colour rules)
+    function applyGlow(state) {
+      if (state.glow === false) timerText.style.filter = 'none';
+    }
+
+    // Clock mode refresh — independent from the timer tick, which stops when paused
+    setInterval(() => {
+      if (currentState && currentState.displayMode === 'clock') {
+        timerText.textContent = formatClock(serverNow());
+      }
+    }, 1000);
 
     // Listen to state changes from Firebase
     const stateRef = ref(db, `rooms/${roomCode}/state`);
@@ -400,7 +424,7 @@
       // computeTimeLeft is mode-aware (countup uses chronoBase, ignoring sentinel `timeLeft`)
       displayTimeLeft = computeTimeLeft(state);
       currentState.timeLeft = displayTimeLeft;
-      timerText.textContent = formatTimeForState(currentState, displayTimeLeft);
+      timerText.textContent = displayText(currentState, displayTimeLeft);
 
       if (state.isRunning) {
         if (!localInterval) startLocalTick();
@@ -426,9 +450,11 @@
         timerText.style.filter = 'drop-shadow(0 0 30px rgba(102, 126, 234, 0.5))';
       }
 
-      // Size
-      timerText.className = 'timer-text ' + (sizeMap[state.size] || 'size-text-6xl');
+      // Size (slider px, or S/M/L/XL preset) + font
+      timerText.className = 'timer-text';
       if (state.color) timerText.classList.add('solid-color');
+      timerText.style.fontSize = fontSizePx(state) + 'px';
+      timerContainer.style.fontFamily = fontCss(state.fontFamily);
 
       // Transparency
       timerContainer.style.opacity = (state.transparency || 100) / 100;

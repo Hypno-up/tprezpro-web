@@ -6,15 +6,23 @@
  *   node scripts/generate-licenses.js --type day --count 10
  *   node scripts/generate-licenses.js --type multi --count 5
  *
+ * Requires FIREBASE_DB_SECRET in the environment (the `/licenses` node is closed
+ * to public reads/writes by database.rules.json):
+ *   FIREBASE_DB_SECRET=xxxx node scripts/generate-licenses.js --type day --count 10
+ *
  * Types:
  *   day   = 24 hours, 1 machine
  *   multi = 72 hours (3 days), 1 machine
  */
 
-const https = require('https');
 const crypto = require('crypto');
 
-const FIREBASE_DB_URL = 'https://tprezpro-web-default-rtdb.europe-west1.firebasedatabase.app';
+const { firebaseRequest } = require('../netlify/lib/firebase-rest');
+
+if (!process.env.FIREBASE_DB_SECRET) {
+  console.error('FIREBASE_DB_SECRET manquant (Firebase > Parametres du projet > Comptes de service > Codes secrets de la base de donnees)');
+  process.exit(1);
+}
 
 const args = process.argv.slice(2);
 const typeIdx = args.indexOf('--type');
@@ -56,26 +64,6 @@ function generateCode() {
   return code;
 }
 
-function firebasePut(path, data) {
-  return new Promise((resolve, reject) => {
-    const url = new URL(`${FIREBASE_DB_URL}${path}.json`);
-    const body = JSON.stringify(data);
-    const req = https.request({
-      hostname: url.hostname,
-      path: url.pathname,
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
-    }, (res) => {
-      let d = '';
-      res.on('data', c => d += c);
-      res.on('end', () => resolve(d));
-    });
-    req.on('error', reject);
-    req.write(body);
-    req.end();
-  });
-}
-
 async function main() {
   console.log(`\nGeneration de ${count} codes "${plan.label}" (${plan.durationHours}h)\n`);
   console.log('─'.repeat(50));
@@ -93,7 +81,7 @@ async function main() {
       ...(plan.unlimited ? { unlimited: true } : {})
     };
 
-    await firebasePut(`/licenses/${code}`, licenseData);
+    await firebaseRequest(`/licenses/${code}`, 'PUT', licenseData);
     codes.push(code);
     console.log(`  ${code}  (${plan.label})`);
   }

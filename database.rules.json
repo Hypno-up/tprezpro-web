@@ -1,0 +1,22 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "licenses": {
+      ".read": false,
+      ".write": false
+    },
+
+    "rooms": {
+      "$code": {
+        ".read": true,
+        ".write": "$code.matches(/^[A-Z0-9]{6}$/)",
+        ".validate": "newData.hasChildren(['state']) || !newData.exists()",
+        "state": {
+          "message": { ".validate": "newData.isString() && newData.val().length <= 200" }
+        }
+      }
+    }
+  }
+}

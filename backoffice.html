@@ -6,6 +6,7 @@
   <title>Timer Pro - BackOffice</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="/fonts/fonts.css">
   <style>
     body { height: 100vh; overflow: hidden; }
 
@@ -152,6 +153,22 @@
           </div>
         </div>
 
+        <!-- External display options -->
+        <div class="glass-card p-3">
+          <label class="section-label">Ecran externe</label>
+          <div class="grid grid-cols-2 gap-2 mb-3">
+            <button id="show-timer-btn" class="btn btn-purple py-2">&#x23F1;&#xFE0F; Timer</button>
+            <button id="show-clock-btn" class="btn btn-gray py-2">&#x1F552; Heure actuelle</button>
+          </div>
+          <button id="glow-btn" class="btn btn-indigo w-full py-2 mb-3">&#x2728; Halo : active</button>
+          <label class="text-xs text-gray-400 mb-1 block" for="font-select">Police</label>
+          <select id="font-select" class="w-full rounded-lg px-3 py-2 text-sm mb-3"></select>
+          <label class="section-label text-sm" for="font-size-slider">
+            Taille : <span id="font-size-value" class="text-purple-400">80</span> px
+          </label>
+          <input id="font-size-slider" type="range" min="32" max="320" step="4" value="80">
+        </div>
+
       </div>
 
       <!-- RIGHT COLUMN -->
@@ -286,15 +303,15 @@
       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:0.8rem;margin-bottom:0.6rem;">
         <div style="font-weight:700;color:#166534;font-size:0.85rem;margin-bottom:0.3rem;">1. Telecharger l'application</div>
         <div style="display:flex;gap:0.4rem;flex-wrap:wrap;">
-          <a href="https://github.com/Hypno-up/tprezpro-web/releases/download/v1.8.0/Timer.Display-1.8.0-arm64.dmg"
+          <a href="https://github.com/Hypno-up/tprezpro-web/releases/download/v1.8.4/Timer.Display-1.8.4-arm64.dmg"
              style="flex:1;text-align:center;background:#22c55e;color:white;padding:0.4rem;border-radius:6px;font-size:0.75rem;font-weight:600;text-decoration:none;">
             Mac (Apple Silicon)
           </a>
-          <a href="https://github.com/Hypno-up/tprezpro-web/releases/download/v1.8.0/Timer.Display-1.8.0.dmg"
+          <a href="https://github.com/Hypno-up/tprezpro-web/releases/download/v1.8.4/Timer.Display-1.8.4.dmg"
              style="flex:1;text-align:center;background:#22c55e;color:white;padding:0.4rem;border-radius:6px;font-size:0.75rem;font-weight:600;text-decoration:none;">
             Mac (Intel)
           </a>
-          <a href="https://github.com/Hypno-up/tprezpro-web/releases/download/v1.8.0/Timer.Display.1.8.0.exe"
+          <a href="https://github.com/Hypno-up/tprezpro-web/releases/download/v1.8.4/Timer.Display.1.8.4.exe"
              style="flex:1;text-align:center;background:#3b82f6;color:white;padding:0.4rem;border-radius:6px;font-size:0.75rem;font-weight:600;text-decoration:none;">
             Windows
           </a>
@@ -356,8 +373,10 @@
       initTimerEngine, startTimer, pauseTimer, resetTimer, setTime,
       setColor, setSize, setTransparency, setVisibility, setMessage,
       setMessagePosition, toggleLock, updateLocalState, getLocalState,
-      handleVisibilityChange, setMode, isOverflow
+      handleVisibilityChange, setMode, isOverflow, setServerTimeOffset,
+      setDisplayMode, setGlow, setFontFamily, setFontSizePx
     } from '/js/timer-engine.js';
+    import { FONTS, fontCss, fontSizePx, FONT_SIZE_MIN, FONT_SIZE_MAX } from '/js/display-options.js';
     import { isLicensed, validateLicense, loadStoredLicense, getDemoMaxSeconds, getLicenseData } from '/js/license.js';
 
     // Room code
@@ -371,6 +390,7 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
     initFirebase({ initializeApp: () => app }, { getDatabase: () => db });
+    onValue(ref(db, '.info/serverTimeOffset'), (snap) => setServerTimeOffset(snap.val()));
 
     // Init timer engine
     const stateRef = ref(db, `rooms/${roomCode}/state`);
@@ -398,8 +418,15 @@
     const licenseStatus = document.getElementById('license-status');
     const mobileUrl = document.getElementById('mobile-url');
     const toast = document.getElementById('toast');
+    const glowBtn = document.getElementById('glow-btn');
+    const fontSelect = document.getElementById('font-select');
+    const fontSizeSlider = document.getElementById('font-size-slider');
+    const fontSizeValue = document.getElementById('font-size-value');
 
     // ============ SETUP ============
+    fontSelect.innerHTML = Object.entries(FONTS)
+      .map(([key, f]) => `<option value="${key}" style="font-family:${f.css.replace(/"/g, '&quot;')}">${f.label}</option>`)
+      .join('');
     roomBadge.textContent = roomCode;
     const dispURL = getDisplayURL(roomCode);
     displayUrl.textContent = dispURL;
@@ -507,6 +534,24 @@
       // Transparency
       transpSlider.value = state.transparency || 100;
       transpValue.textContent = state.transparency || 100;
+
+      // External display options
+      const clock = state.displayMode === 'clock';
+      document.getElementById('show-timer-btn').className = clock ? 'btn btn-gray py-2' : 'btn btn-purple py-2';
+      document.getElementById('show-clock-btn').className = clock ? 'btn btn-purple py-2' : 'btn btn-gray py-2';
+      if (clock) modeLabelEl.textContent = '\u{1F552} Ecran externe : heure actuelle \u2014 ' + modeLabelEl.textContent;
+
+      const glowOn = state.glow !== false;
+      glowBtn.innerHTML = glowOn ? '&#x2728; Halo : active' : '&#x2728; Halo : desactive';
+      glowBtn.className = (glowOn ? 'btn btn-indigo' : 'btn btn-gray') + ' w-full py-2 mb-3';
+
+      const fontKey = FONTS[state.fontFamily] ? state.fontFamily : 'system';
+      if (fontSelect.value !== fontKey) fontSelect.value = fontKey;
+      timerDisplay.style.fontFamily = fontCss(fontKey);
+
+      const px = fontSizePx(state);
+      if (document.activeElement !== fontSizeSlider) fontSizeSlider.value = px;
+      fontSizeValue.textContent = px;
     }
 
     // ============ CONTROLS ============
@@ -572,6 +617,23 @@
     // Sizes
     document.querySelectorAll('.size-pick').forEach(btn => {
       btn.addEventListener('click', () => setSize(btn.dataset.size));
+    });
+
+    // External display: timer vs current time
+    document.getElementById('show-timer-btn').addEventListener('click', () => setDisplayMode('timer'));
+    document.getElementById('show-clock-btn').addEventListener('click', () => setDisplayMode('clock'));
+
+    // Halo
+    glowBtn.addEventListener('click', () => setGlow(getLocalState().glow === false));
+
+    // Font
+    fontSelect.addEventListener('change', (e) => setFontFamily(e.target.value));
+
+    // Size slider
+    fontSizeSlider.addEventListener('input', (e) => {
+      const px = Math.min(FONT_SIZE_MAX, Math.max(FONT_SIZE_MIN, parseInt(e.target.value, 10)));
+      fontSizeValue.textContent = px;
+      setFontSizePx(px);
     });
 
     // Visibility

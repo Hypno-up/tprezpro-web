@@ -144,13 +144,10 @@
   <div id="copy-toast" class="copy-toast">Copie !</div>
 
   <script type="module">
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-    import { getDatabase, ref, onValue, set, push, update } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
-    import { firebaseConfig } from '/js/firebase-config.js';
-
-    const ADMIN_CODE = 'TPRO-MASTER-01';
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
+    // All license reads/writes go through /.netlify/functions/license-admin.
+    // The admin code is checked server-side (ADMIN_CODE env var) and is never in this file.
+    const API = '/.netlify/functions/license-admin';
+    const AUTH_KEY = 'license-admin-code';
 
     // Auth
     const authScreen = document.getElementById('auth-screen');
@@ -158,23 +155,53 @@
     const adminPass = document.getElementById('admin-pass');
     const authError = document.getElementById('auth-error');
 
-    // Check stored auth
-    if (sessionStorage.getItem('license-admin-auth') === 'ok') {
+    function getAdminCode() {
+      try { return sessionStorage.getItem(AUTH_KEY) || ''; } catch { return ''; }
+    }
+
+    async function api(action, data = {}, code = getAdminCode()) {
+      const res = await fetch(API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-code': code },
+        body: JSON.stringify({ action, ...data })
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        try { sessionStorage.removeItem(AUTH_KEY); } catch {}
+        adminPanel.style.display = 'none';
+        authScreen.style.display = '';
+      }
+      if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+      return body;
+    }
+
+    function escapeHTML(value) {
+      return String(value ?? '').replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+
+    function showPanel() {
       authScreen.style.display = 'none';
       adminPanel.style.display = 'block';
       loadLicenses();
     }
 
+    // Check stored auth
+    if (getAdminCode()) showPanel();
+
     document.getElementById('admin-login').addEventListener('click', doLogin);
     adminPass.addEventListener('keypress', (e) => { if (e.key === 'Enter') doLogin(); });
 
-    function doLogin() {
-      if (adminPass.value.trim() === ADMIN_CODE) {
-        sessionStorage.setItem('license-admin-auth', 'ok');
-        authScreen.style.display = 'none';
-        adminPanel.style.display = 'block';
-        loadLicenses();
-      } else {
+    async function doLogin() {
+      const code = adminPass.value.trim();
+      authError.classList.add('hidden');
+      try {
+        await api('login', {}, code);
+        try { sessionStorage.setItem(AUTH_KEY, code); } catch {}
+        showPanel();
+      } catch (err) {
+        authError.textContent = err.message === 'Code incorrect' ? 'Code incorrect' : err.message;
         authError.classList.remove('hidden');
       }
     }
@@ -182,11 +209,12 @@
     // License data
     let allLicenses = [];
     let currentTab = 'all';
+    let refreshTimer = null;
 
-    function loadLicenses() {
-      onValue(ref(db, 'licenses'), (snapshot) => {
-        const data = snapshot.val() || {};
-        allLicenses = Object.entries(data).map(([code, info]) => ({
+    async function loadLicenses() {
+      try {
+        const { licenses } = await api('list');
+        allLicenses = Object.entries(licenses || {}).map(([code, info]) => ({
           code,
           ...info,
           status: getStatus(info)
@@ -194,7 +222,11 @@
 
         updateStats();
         renderTable();
-      });
+      } catch (err) {
+        showToast('Erreur: ' + err.message);
+      }
+      clearTimeout(refreshTimer);
+      if (getAdminCode()) refreshTimer = setTimeout(loadLicenses, 30000);
     }
 
     function getStatus(license) {
@@ -254,12 +286,13 @@
           expired: '<span class="badge badge-expired">Expiree</span>'
         }[l.status];
 
-        const duration = l.unlimited ? 'Illimite' : `${l.durationHours || 24}h`;
-        const client = l.client || '-';
-        const machine = l.machineId ? l.machineId.substring(0, 8) + '...' : '-';
+        const duration = l.unlimited ? 'Illimite' : `${escapeHTML(l.durationHours || 24)}h`;
+        const client = escapeHTML(l.client || '-');
+        const machine = l.machineId ? escapeHTML(String(l.machineId).substring(0, 8)) + '...' : '-';
+        const code = escapeHTML(l.code);
 
         return `<tr>
-          <td><span class="code-text" onclick="copyCode('${l.code}')">${l.code}</span></td>
+          <td><span class="code-text" data-code="${code}">${code}</span></td>
           <td class="text-gray-300">${client}</td>
           <td class="text-gray-400">${duration}</td>
           <td>${statusBadge}</td>
@@ -268,6 +301,14 @@
         </tr>`;
       }).join('');
     }
+
+    // Copy single code (event delegation — no inline handlers)
+    document.getElementById('license-table').addEventListener('click', (e) => {
+      const el = e.target.closest('[data-code]');
+      if (!el) return;
+      navigator.clipboard.writeText(el.dataset.code);
+      showToast('Code copie: ' + el.dataset.code);
+    });
 
     // Tabs
     document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -295,40 +336,19 @@
       btn.disabled = true;
       btn.textContent = 'Generation...';
 
-      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-      const codes = [];
-
-      for (let i = 0; i < count; i++) {
-        let code = 'TPRO-';
-        for (let j = 0; j < 4; j++) code += chars[Math.floor(Math.random() * chars.length)];
-        code += '-';
-        for (let j = 0; j < 4; j++) code += chars[Math.floor(Math.random() * chars.length)];
-
-        const durationLabel = durationHours === 24 ? '1 jour' : durationHours === 48 ? '2 jours' : '3 jours';
-        const plan = durationHours === 24 ? 'day' : durationHours === 48 ? '2day' : 'multi';
-
-        await set(ref(db, `licenses/${code}`), {
-          plan,
-          durationHours,
-          createdAt: new Date().toISOString(),
-          activatedAt: null,
-          machineId: null,
-          expired: false,
-          client: client,
-          email: email || null
-        });
-
-        codes.push(code);
+      try {
+        const { codes } = await api('generate', { client, email, durationHours, count });
+        const genResult = document.getElementById('gen-result');
+        const genCodes = document.getElementById('gen-codes');
+        genCodes.innerHTML = codes.map(c => `<div>${escapeHTML(c)}</div>`).join('');
+        genResult.classList.remove('hidden');
+        loadLicenses();
+      } catch (err) {
+        alert('Erreur: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Generer';
       }
-
-      // Show result
-      const genResult = document.getElementById('gen-result');
-      const genCodes = document.getElementById('gen-codes');
-      genCodes.innerHTML = codes.map(c => `<div>${c}</div>`).join('');
-      genResult.classList.remove('hidden');
-
-      btn.disabled = false;
-      btn.textContent = 'Generer';
     });
 
     // Copy all generated codes
@@ -340,12 +360,6 @@
       navigator.clipboard.writeText(text);
       showToast('Copie avec infos client !');
     });
-
-    // Copy single code
-    window.copyCode = function(code) {
-      navigator.clipboard.writeText(code);
-      showToast('Code copie: ' + code);
-    };
 
     function showToast(text) {
       const toast = document.getElementById('copy-toast');

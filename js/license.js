@@ -36,26 +36,34 @@ export async function validateLicense(key) {
 }
 
 export async function loadStoredLicense() {
+  let stored;
   try {
-    const stored = localStorage.getItem(LICENSE_STORAGE_KEY);
-    if (!stored) return false;
-
-    const { key, data } = JSON.parse(atob(stored));
-
-    // Check expiry client-side first
-    if (data.expires && new Date(data.expires) < new Date()) {
-      localStorage.removeItem(LICENSE_STORAGE_KEY);
-      licenseData = null;
-      return false;
-    }
-
-    licenseData = { valid: true, ...data };
-    return true;
+    stored = JSON.parse(atob(localStorage.getItem(LICENSE_STORAGE_KEY) || ''));
   } catch {
-    localStorage.removeItem(LICENSE_STORAGE_KEY);
-    licenseData = null;
+    clearLicense();
     return false;
   }
+  if (!stored || !stored.key) {
+    clearLicense();
+    return false;
+  }
+
+  // Re-check with the server: the stored blob is only a cache, anyone can edit localStorage.
+  const result = await validateLicense(stored.key);
+  if (result.valid) return true;
+
+  if (result.error === 'Network error' || result.error === 'Erreur serveur') {
+    // Offline or server hiccup: fall back to the cached expiry so a paid user isn't locked out mid-event.
+    const expires = stored.data && (stored.data.expiresAt || stored.data.expires);
+    const stillValid = stored.data && (stored.data.unlimited || (expires && new Date(expires) > new Date()));
+    if (stillValid) {
+      licenseData = { valid: true, ...stored.data };
+      return true;
+    }
+  }
+
+  clearLicense();
+  return false;
 }
 
 export function clearLicense() {

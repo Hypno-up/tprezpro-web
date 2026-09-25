@@ -7,6 +7,8 @@
   <!-- Firebase compat (works with file:// and regular script tags) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <!-- Display fonts, self-hosted on the web app (CORS enabled in netlify.toml) -->
+  <link rel="stylesheet" href="https://tprezpro-web.netlify.app/fonts/fonts.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -128,16 +130,42 @@
     }
     var db = firebase.database();
 
+    // Firebase server clock offset, so the overlay agrees with the BackOffice that pressed Start
+    var serverTimeOffset = 0;
+    db.ref('.info/serverTimeOffset').on('value', function (snap) { serverTimeOffset = Number(snap.val()) || 0; });
+    function serverNow() { return Date.now() + serverTimeOffset; }
+
     var timerContainer = document.getElementById('timer-container');
     var timerText = document.getElementById('timer-text');
     var messageText = document.getElementById('message-text');
 
-    var sizeMap = {
-      'text-4xl': 'size-text-4xl',
-      'text-6xl': 'size-text-6xl',
-      'text-8xl': 'size-text-8xl',
-      'text-9xl': 'size-text-9xl'
+    // Keep in sync with FONTS / SIZE_PRESETS_PX in js/display-options.js
+    var FONTS = {
+      'system': "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      'noto-sans': "'Noto Sans', sans-serif",
+      'inter': "'Inter', sans-serif",
+      'montserrat': "'Montserrat', sans-serif",
+      'roboto-mono': "'Roboto Mono', monospace",
+      'oswald': "'Oswald', sans-serif",
+      'bebas-neue': "'Bebas Neue', sans-serif",
+      'orbitron': "'Orbitron', sans-serif",
+      'share-tech-mono': "'Share Tech Mono', monospace"
     };
+    var SIZE_PRESETS_PX = { 'text-4xl': 48, 'text-6xl': 80, 'text-8xl': 128, 'text-9xl': 192 };
+
+    function fontSizePx(state) {
+      if (state && Number(state.fontSizePx) > 0) return Number(state.fontSizePx);
+      return SIZE_PRESETS_PX[state && state.size] || SIZE_PRESETS_PX['text-6xl'];
+    }
+
+    function isClock(state) {
+      return !!state && state.displayMode === 'clock';
+    }
+
+    function formatClock() {
+      var d = new Date(serverNow());
+      return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    }
 
     var prevLocked = true;
     var connected = false;
@@ -153,12 +181,12 @@
       if (state.mode === 'countup') {
         var base = state.chronoBase != null ? state.chronoBase : 0;
         if (!state.isRunning) return base;
-        var now = Date.now();
+        var now = serverNow();
         var elapsed = Math.floor((now - (state.lastTick || now)) / 1000);
         return base + (elapsed < 0 ? 0 : elapsed);
       }
       if (!state.isRunning) return state.timeLeft || 0;
-      var now2 = Date.now();
+      var now2 = serverNow();
       var base2 = state.startedTimeLeft != null ? state.startedTimeLeft : (state.timeLeft || 0);
       var elapsed2 = Math.floor((now2 - (state.lastTick || now2)) / 1000);
       return Math.max(0, base2 - elapsed2);
@@ -173,6 +201,10 @@
 
     function renderTime(timeLeft, state) {
       var s = state || currentState || {};
+      if (isClock(s)) {
+        timerText.textContent = formatClock();
+        return;
+      }
       var total = s.totalTime || 0;
       var overflow = s.mode === 'countup' && total > 0 && timeLeft >= total;
       var displayed = overflow ? (timeLeft - total) : timeLeft;
@@ -198,8 +230,10 @@
         var remaining = isCountup ? (total - tl) : tl;
         var overflow = isCountup && total > 0 && tl >= total;
 
-        // Blink in last 30s OR while overflowing in countup
-        if (overflow || (remaining > 0 && remaining <= 30)) {
+        // Blink in last 30s OR while overflowing in countup (never in clock mode)
+        if (isClock(currentState)) {
+          timerText.classList.remove('blinking');
+        } else if (overflow || (remaining > 0 && remaining <= 30)) {
           timerText.classList.add('blinking');
         } else {
           timerText.classList.remove('blinking');
@@ -284,7 +318,7 @@
         stopLocalCountdown();
       }
 
-      var overflow = isOverflowState(state);
+      var overflow = !isClock(state) && isOverflowState(state);
 
       // Visibility
       timerContainer.classList.toggle('hidden-state', !state.isVisible);
@@ -304,9 +338,14 @@
         timerText.style.filter = 'drop-shadow(0 0 30px rgba(102, 126, 234, 0.5))';
       }
 
-      // Size
-      timerText.className = 'timer-text ' + (sizeMap[state.size] || 'size-text-6xl');
+      // Halo on/off
+      if (state.glow === false) timerText.style.filter = 'none';
+
+      // Size (slider px, or S/M/L/XL preset) + font
+      timerText.className = 'timer-text';
       if (state.color || overflow) timerText.classList.add('solid-color');
+      timerText.style.fontSize = fontSizePx(state) + 'px';
+      timerContainer.style.fontFamily = FONTS[state.fontFamily] || FONTS.system;
 
       // Transparency - use Electron API for real window transparency
       if (window.electronAPI) {
@@ -319,7 +358,7 @@
       var tlNow = state.timeLeft || 0;
       var remaining = isCountup ? (total - tlNow) : tlNow;
       var nearLimit = (remaining >= 0 && remaining <= 30);
-      if (state.isBlinking || overflow || (state.isRunning && total > 0 && nearLimit)) {
+      if (!isClock(state) && (state.isBlinking || overflow || (state.isRunning && total > 0 && nearLimit))) {
         timerText.classList.add('blinking');
       } else {
         timerText.classList.remove('blinking');
@@ -345,6 +384,11 @@
       diag.listenerErr = (err && err.message) || String(err);
       timerText.innerHTML = '<span class="connecting" style="color:#f87171;font-size:0.8rem;">Lecture salle refusee: ' + diag.listenerErr + '</span>';
     });
+
+    // Clock mode refresh — independent from the timer tick, which stops when paused
+    setInterval(function() {
+      if (connected && isClock(currentState)) timerText.textContent = formatClock();
+    }, 1000);
 
     // Connection error handling — surface error from .on second arg + drop count
     var dropCount = 0;
