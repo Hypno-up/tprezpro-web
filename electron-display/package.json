@@ -1,6 +1,6 @@
 {
   "name": "tprezpro-display",
-  "version": "1.8.5",
+  "version": "1.8.6",
   "description": "Timer Display overlay - transparent floating window synced with Firebase",
   "main": "main.js",
   "scripts": {
@@ -38,6 +38,7 @@
       "display.html",
       "room-input.html",
       "package.json"
-    ]
+    ],
+    "afterPack": "build/adhoc-sign.js"
   }
 }

@@ -324,7 +324,9 @@
         <div style="font-size:0.75rem;color:#374151;line-height:1.5;">
           &#x2022; Ouvrez le fichier <b>.dmg</b> telecharge<br>
           &#x2022; Glissez <b>Timer Display</b> dans le dossier <b>Applications</b><br>
-          &#x2022; Si le message <i>"app endommagee"</i> apparait :<br>
+          &#x2022; Au premier lancement, macOS indique qu'il ne peut pas verifier l'app : cliquez <b>OK</b>,
+          puis <b>Reglages Systeme &rarr; Confidentialite et securite &rarr; Ouvrir quand meme</b> (une seule fois)<br>
+          &#x2022; Si le message <i>"app endommagee"</i> apparait (anciennes versions) :<br>
           <div style="background:#1e293b;color:#e2e8f0;padding:0.4rem 0.6rem;border-radius:4px;font-family:monospace;font-size:0.7rem;margin:0.3rem 0;cursor:pointer;position:relative;" onclick="navigator.clipboard.writeText('xattr -cr /Applications/Timer\\ Display.app');this.querySelector('.cp').textContent='Copie !';">
             xattr -cr /Applications/Timer\ Display.app
             <span class="cp" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);color:#8b5cf6;font-size:0.6rem;">Cliquer pour copier</span>
