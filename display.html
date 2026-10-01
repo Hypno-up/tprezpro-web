@@ -457,7 +457,8 @@
       timerContainer.style.fontFamily = fontCss(state.fontFamily);
 
       // Transparency
-      timerContainer.style.opacity = (state.transparency || 100) / 100;
+      // inline opacity would override the .hidden-state class, so only set it while visible
+      timerContainer.style.opacity = state.isVisible ? (state.transparency || 100) / 100 : '';
 
       // Blinking + overflow color — centralised in applyDynamicVisuals
       applyDynamicVisuals(state);

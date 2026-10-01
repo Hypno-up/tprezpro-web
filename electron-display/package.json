@@ -1,6 +1,6 @@
 {
   "name": "tprezpro-display",
-  "version": "1.8.7",
+  "version": "1.8.8",
   "description": "Timer Display overlay - transparent floating window synced with Firebase",
   "main": "main.js",
   "scripts": {
