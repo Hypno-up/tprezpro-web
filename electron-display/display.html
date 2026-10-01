@@ -116,23 +116,22 @@
       appId: "1:190667786733:web:dcd2a2d52855ca63cc7fe4"
     };
 
+    // The realtime SDK is optional: if it fails to load or init (gstatic blocked, proxy...),
+    // `db` stays null and the REST fallback below takes over.
+    var db = null;
+    var sdkError = null;
     try {
+      if (params.get('forceFallback')) throw new Error('fallback force (debug)');
+      if (typeof firebase === 'undefined' || !firebase.database) throw new Error('SDK Firebase non charge');
       firebase.initializeApp(firebaseConfig);
+      db = firebase.database();
     } catch (e) {
-      document.getElementById('timer-text').innerHTML =
-        '<span class="connecting" style="color:#f87171;font-size:0.8rem;">Firebase init failed: ' + (e && e.message ? e.message : e) + '</span>';
-      throw e;
+      sdkError = (e && e.message) || String(e);
     }
-    if (typeof firebase === 'undefined' || !firebase.database) {
-      document.getElementById('timer-text').innerHTML =
-        '<span class="connecting" style="color:#f87171;font-size:0.8rem;">Firebase SDK not loaded (check internet / gstatic.com blocked)</span>';
-      throw new Error('Firebase SDK missing');
-    }
-    var db = firebase.database();
 
     // Firebase server clock offset, so the overlay agrees with the BackOffice that pressed Start
     var serverTimeOffset = 0;
-    db.ref('.info/serverTimeOffset').on('value', function (snap) { serverTimeOffset = Number(snap.val()) || 0; });
+    if (db) db.ref('.info/serverTimeOffset').on('value', function (snap) { serverTimeOffset = Number(snap.val()) || 0; });
     function serverNow() { return Date.now() + serverTimeOffset; }
 
     var timerContainer = document.getElementById('timer-container');
@@ -255,19 +254,21 @@
       }
     }
 
-    // v1.8.4 — diagnostic harness. If after 5s the on() listener still hasn't
+    // v1.8.4 — diagnostic harness. If after 8s the on() listener still hasn't
     // delivered data, surface what we know on screen so we don't end up stuck on
     // "Connecte, attente donnees salle..." with no actionable info.
     var diag = {
       onceFired: false,
       onceErr: null,
       listenerFired: false,
-      listenerErr: null
+      listenerErr: null,
+      fallback: 'inactif'
     };
+    var roomMissing = false;
 
     // Parallel one-shot read — if even THIS doesn't return, the issue is
     // network/permissions/SDK, not the long-lived subscription.
-    db.ref('rooms/' + roomCode + '/state').once('value')
+    if (db) db.ref('rooms/' + roomCode + '/state').once('value')
       .then(function(snap) {
         diag.onceFired = true;
         diag.onceData = snap.val() ? 'OK' : 'EMPTY';
@@ -277,16 +278,18 @@
       });
 
     setTimeout(function() {
-      if (connected) return; // listener already delivered, nothing to diagnose
+      if (connected || roomMissing) return; // data (or a clear "room not found") already shown
       var lines = [
-        'Diagnostic Firebase apres 5s :',
+        'Diagnostic Firebase apres 8s :',
         'salle = ' + roomCode,
+        'sdk   = ' + (db ? 'OK' : sdkError),
+        'secours = ' + diag.fallback,
         'on()  = ' + (diag.listenerFired ? 'OK' : (diag.listenerErr || 'aucun callback')),
         'once()= ' + (diag.onceFired ? (diag.onceData || 'OK') : (diag.onceErr || 'aucun callback'))
       ];
       timerText.innerHTML = '<span class="connecting" style="font-size:0.75rem;color:#fbbf24;white-space:pre;text-align:left;display:inline-block;">' +
         lines.join('\n') + '</span>';
-    }, 5000);
+    }, 8000);
 
     setTimeout(function() {
       if (!connected) {
@@ -294,11 +297,12 @@
       }
     }, 15000);
 
-    // Listen to state
-    db.ref('rooms/' + roomCode + '/state').on('value', function(snapshot) {
-      diag.listenerFired = true;
-      var state = snapshot.val();
+    // Render a room state — fed by the realtime SDK listener or by the REST fallback
+    function applyState(state) {
+      roomMissing = !state;
       if (!state) {
+        connected = false;
+        stopLocalCountdown();
         timerText.innerHTML = '<span class="connecting">Salle introuvable: ' + roomCode + '</span>';
         return;
       }
@@ -380,10 +384,120 @@
       } else {
         messageText.style.opacity = '0';
       }
+    }
+
+    // Listen to state (realtime SDK)
+    if (db) db.ref('rooms/' + roomCode + '/state').on('value', function(snapshot) {
+      diag.listenerFired = true;
+      stopFallback(); // the SDK works after all — it is the better source (server clock offset)
+      applyState(snapshot.val());
     }, function(err) {
       diag.listenerErr = (err && err.message) || String(err);
       timerText.innerHTML = '<span class="connecting" style="color:#f87171;font-size:0.8rem;">Lecture salle refusee: ' + diag.listenerErr + '</span>';
     });
+
+    // === REST fallback (v1.8.7) ===
+    // Some Windows networks (firewall / antivirus / proxy) let the SDK "connect" but never
+    // deliver data. Rooms are publicly readable over plain HTTPS, so if the SDK has delivered
+    // nothing after FALLBACK_DELAY_MS we read the room through the REST API instead:
+    // first as a server-sent-events stream (instant updates), else by polling every second.
+    var FALLBACK_DELAY_MS = 3000;
+    var REST_URL = firebaseConfig.databaseURL + '/rooms/' + encodeURIComponent(roomCode) + '/state.json';
+    var fallback = { active: false, es: null, poll: null, state: null, lastJson: null };
+
+    function startFallback() {
+      if (fallback.active || diag.listenerFired) return;
+      fallback.active = true;
+      // ?forceFallback=poll skips the stream (debug)
+      if (params.get('forceFallback') === 'poll') startPolling();
+      else startStream();
+    }
+
+    function stopFallback() {
+      if (!fallback.active) return;
+      fallback.active = false;
+      diag.fallback = 'arrete (SDK OK)';
+      if (fallback.es) { fallback.es.close(); fallback.es = null; }
+      if (fallback.poll) { clearInterval(fallback.poll); fallback.poll = null; }
+    }
+
+    function deliverFallback() {
+      if (!fallback.active) return;
+      // applyState mutates its argument, so hand it a copy
+      applyState(fallback.state ? Object.assign({}, fallback.state) : null);
+    }
+
+    function startStream() {
+      var got = false;
+      var es;
+      try { es = new EventSource(REST_URL); } catch (e) { startPolling(); return; }
+      fallback.es = es;
+      diag.fallback = 'flux en attente';
+      function onEvent(isPatch) {
+        return function(e) {
+          got = true;
+          diag.fallback = 'flux OK';
+          mergeStreamEvent(JSON.parse(e.data), isPatch);
+        };
+      }
+      es.addEventListener('put', onEvent(false));
+      es.addEventListener('patch', onEvent(true));
+      function giveUp() {
+        if (got || fallback.es !== es) return; // once it has worked, EventSource reconnects by itself
+        es.close();
+        fallback.es = null;
+        if (fallback.active) startPolling();
+      }
+      es.onerror = giveUp;
+      setTimeout(giveUp, 5000);
+    }
+
+    // Firebase stream events: { path: "/" | "/field", data: value } — `put` replaces, `patch` merges
+    function mergeStreamEvent(msg, isPatch) {
+      var keys = String(msg.path || '/').split('/').filter(Boolean);
+      if (keys.length === 0) {
+        fallback.state = isPatch ? Object.assign({}, fallback.state || {}, msg.data || {}) : msg.data;
+      } else {
+        var root = Object.assign({}, fallback.state || {});
+        var node = root;
+        for (var i = 0; i < keys.length - 1; i++) {
+          node[keys[i]] = Object.assign({}, node[keys[i]] || {});
+          node = node[keys[i]];
+        }
+        var last = keys[keys.length - 1];
+        if (msg.data === null) delete node[last];
+        else if (isPatch && typeof msg.data === 'object') node[last] = Object.assign({}, node[last] || {}, msg.data);
+        else node[last] = msg.data;
+        fallback.state = root;
+      }
+      deliverFallback();
+    }
+
+    function startPolling() {
+      if (fallback.poll) return;
+      diag.fallback = 'interrogation en attente';
+      function tick() {
+        fetch(REST_URL, { cache: 'no-store' })
+          .then(function(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.text();
+          })
+          .then(function(text) {
+            diag.fallback = 'interrogation OK';
+            if (!fallback.active || text === fallback.lastJson) return;
+            fallback.lastJson = text;
+            fallback.state = JSON.parse(text);
+            deliverFallback();
+          })
+          .catch(function(err) {
+            diag.fallback = 'echec: ' + ((err && err.message) || err);
+          });
+      }
+      tick();
+      fallback.poll = setInterval(tick, 1000);
+    }
+
+    setTimeout(startFallback, db ? FALLBACK_DELAY_MS : 0);
 
     // Clock mode refresh — independent from the timer tick, which stops when paused
     setInterval(function() {
@@ -392,7 +506,7 @@
 
     // Connection error handling — surface error from .on second arg + drop count
     var dropCount = 0;
-    db.ref('.info/connected').on('value', function(snap) {
+    if (db) db.ref('.info/connected').on('value', function(snap) {
       if (snap.val()) {
         // connected — only clear the message if we haven't received room data yet
         if (!connected) {
