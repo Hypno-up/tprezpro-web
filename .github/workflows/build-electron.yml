@@ -19,13 +19,21 @@ jobs:
         run: npm install
       - name: Build Mac DMG (ARM64 + x64)
         working-directory: electron-display
-        run: npx electron-builder --mac dmg --arm64 --x64
+        # Developer ID signing + notarization when the secrets are configured
+        # (see electron-display/build/notarize.js); otherwise ad-hoc signing only.
+        # CSC_LINK must stay UNSET when there is no certificate: electron-builder
+        # treats an empty value as a file path and fails.
+        run: |
+          if [ -n "$MAC_CERT_P12_BASE64" ]; then
+            export CSC_LINK="$MAC_CERT_P12_BASE64"
+            export CSC_KEY_PASSWORD="$MAC_CERT_PASSWORD"
+          else
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+          fi
+          npx electron-builder --mac dmg --arm64 --x64
         env:
-          # Developer ID signing + notarization when the secrets are configured
-          # (see electron-display/build/notarize.js); otherwise ad-hoc signing only.
-          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.MAC_CERT_P12_BASE64 != '' }}
-          CSC_LINK: ${{ secrets.MAC_CERT_P12_BASE64 }}
-          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          MAC_CERT_P12_BASE64: ${{ secrets.MAC_CERT_P12_BASE64 }}
+          MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
