@@ -128,6 +128,9 @@ function createDisplayWindow() {
   });
 
   ipcMain.on('set-opacity', (event, opacity) => {
+    // Never on Windows: setOpacity() on the transparent overlay freezes its painting.
+    // The renderer applies opacity in CSS there (see display.html).
+    if (process.platform === 'win32') return;
     if (displayWindow && !displayWindow.isDestroyed()) {
       displayWindow.setOpacity(opacity);
     }

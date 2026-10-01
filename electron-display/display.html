@@ -166,6 +166,7 @@
       return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
     }
 
+    var IS_WINDOWS = /Windows/i.test(navigator.userAgent);
     var prevLocked = true;
     var connected = false;
     var currentState = null;
@@ -351,9 +352,15 @@
       timerText.style.fontSize = fontSizePx(state) + 'px';
       timerContainer.style.fontFamily = FONTS[state.fontFamily] || FONTS.system;
 
-      // Transparency - use Electron API for real window transparency
-      if (window.electronAPI) {
-        window.electronAPI.setOpacity((state.transparency || 100) / 100);
+      // Transparency. macOS: real window opacity. Windows: CSS opacity instead — calling
+      // win.setOpacity() on a transparent software-composited window freezes its painting
+      // (screen stays stuck on "Connecte, attente donnees salle..." while the DOM updates).
+      var opacity = (state.transparency || 100) / 100;
+      if (window.electronAPI && !IS_WINDOWS) {
+        window.electronAPI.setOpacity(opacity);
+      } else {
+        // inline opacity would override the .hidden-state class, so only set it while visible
+        timerContainer.style.opacity = state.isVisible ? opacity : '';
       }
 
       // Blinking — mode-aware (countup: last 30s before target + permanent past target)
