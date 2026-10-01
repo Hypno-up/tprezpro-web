@@ -105,6 +105,8 @@ function createDisplayWindow() {
     query: { room: roomCode }
   });
 
+  if (process.env.TPREZ_DEBUG_DIR) attachDebugDump(displayWindow, process.env.TPREZ_DEBUG_DIR);
+
   // Debug: log any load errors
   displayWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
     console.error('Display load failed:', errorCode, errorDescription);
@@ -135,6 +137,53 @@ function createDisplayWindow() {
     displayWindow = null;
     app.quit();
   });
+}
+
+// Debug harness (CI only, enabled by TPREZ_DEBUG_DIR): after a few seconds, dump what the
+// renderer thinks it shows (DOM + diagnostics), what it rendered (capturePage) and what is
+// really on screen (desktop capture), then quit. Lets us debug Windows without a Windows PC.
+function attachDebugDump(win, dir) {
+  const { desktopCapturer, screen } = require('electron');
+  fs.mkdirSync(dir, { recursive: true });
+  const logFile = path.join(dir, 'console.log');
+  const log = (line) => fs.appendFileSync(logFile, `${new Date().toISOString()} ${line}\n`);
+  win.webContents.on('console-message', (e, level, message, line, source) => log(`[console:${level}] ${message} (${source}:${line})`));
+  win.webContents.on('render-process-gone', (e, details) => log(`[render-process-gone] ${JSON.stringify(details)}`));
+  app.on('child-process-gone', (e, details) => log(`[child-process-gone] ${JSON.stringify(details)}`));
+  win.webContents.on('did-finish-load', () => log('[did-finish-load]'));
+
+  const dump = async (label) => {
+    try {
+      const dom = await win.webContents.executeJavaScript(`JSON.stringify({
+        text: document.getElementById('timer-text').innerText,
+        connected: typeof connected !== 'undefined' ? connected : 'n/a',
+        diag: typeof diag !== 'undefined' ? diag : 'n/a',
+        sdkError: typeof sdkError !== 'undefined' ? sdkError : 'n/a',
+        fallbackActive: typeof fallback !== 'undefined' ? fallback.active : 'n/a',
+        hidden: document.hidden, visibility: document.visibilityState
+      })`);
+      fs.writeFileSync(path.join(dir, `dom-${label}.json`), dom);
+      log(`[dom-${label}] ${dom}`);
+    } catch (err) { log(`[dom-${label}] ERROR ${err.message}`); }
+    try {
+      const img = await win.webContents.capturePage();
+      fs.writeFileSync(path.join(dir, `page-${label}.png`), img.toPNG());
+    } catch (err) { log(`[page-${label}] ERROR ${err.message}`); }
+    try {
+      const size = screen.getPrimaryDisplay().size;
+      const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: size });
+      if (sources[0]) fs.writeFileSync(path.join(dir, `screen-${label}.png`), sources[0].thumbnail.toPNG());
+    } catch (err) { log(`[screen-${label}] ERROR ${err.message}`); }
+  };
+
+  log(`[start] platform=${process.platform} electron=${process.versions.electron} bounds=${JSON.stringify(win.getBounds())}`);
+  setTimeout(() => dump('02s'), 2000);
+  setTimeout(() => dump('12s'), 12000);
+  setTimeout(async () => {
+    await dump('20s');
+    try { log(`[gpu] ${JSON.stringify(app.getGPUFeatureStatus())}`); } catch (err) { log(`[gpu] ERROR ${err.message}`); }
+    app.quit();
+  }, 20000);
 }
 
 function createRoomInputWindow() {

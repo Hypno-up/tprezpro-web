@@ -1,0 +1,40 @@
+name: Debug overlay on Windows
+
+# Manual run: launches the overlay on a Windows runner against a room and uploads
+# what it displays (DOM state, rendered page, real screen capture, console log).
+on:
+  workflow_dispatch:
+    inputs:
+      room:
+        description: Room code
+        required: true
+        default: TESTYY
+
+jobs:
+  run-overlay:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        working-directory: electron-display
+        run: npm install
+      - name: Run overlay for 20s
+        working-directory: electron-display
+        shell: pwsh
+        env:
+          TPREZ_DEBUG_DIR: ${{ github.workspace }}\debug-out
+          ROOM: ${{ inputs.room }}
+        run: |
+          $p = Start-Process -FilePath "node_modules\electron\dist\electron.exe" -ArgumentList ".", "$env:ROOM" -PassThru
+          $p | Wait-Process -Timeout 60 -ErrorAction SilentlyContinue
+          if (-not $p.HasExited) { $p | Stop-Process -Force }
+          Get-ChildItem "$env:TPREZ_DEBUG_DIR"
+          Get-Content "$env:TPREZ_DEBUG_DIR\console.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: debug-out
+          path: debug-out
